@@ -2,18 +2,82 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Sling TV WebSocket Player</title>
+    <title>Sling TV Remote Player</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; margin: 0; background-color: #f4f4f9; color: #333; }
-        #sidebar { width: 280px; height: 100vh; overflow-y: auto; border-right: 1px solid #ddd; background-color: #fff; flex-shrink: 0; }
-        #sidebar h2 { padding: 15px; margin: 0; border-bottom: 1px solid #ddd; position: sticky; top: 0; background-color: #fff; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            margin: 0;
+            background-color: #f4f4f9;
+            color: #333;
+            overflow: hidden; /* Prevent page scroll from arrow keys */
+        }
+        #sidebar {
+            width: 280px;
+            height: 100vh;
+            overflow-y: auto;
+            border-right: 1px solid #ddd;
+            background-color: #fff;
+            flex-shrink: 0;
+            transition: box-shadow 0.3s ease;
+        }
+        /* Visual feedback for when the sidebar has focus */
+        #sidebar.focused {
+            box-shadow: 0 0 10px 3px rgba(74, 118, 232, 0.7);
+        }
+        #sidebar h2 {
+            padding: 15px;
+            margin: 0;
+            border-bottom: 1px solid #ddd;
+            position: sticky;
+            top: 0;
+            background-color: #fff;
+            z-index: 10;
+        }
         #channel-list { list-style: none; padding: 0; margin: 0; }
-        #channel-list li { padding: 12px 15px; cursor: pointer; border-bottom: 1px solid #eee; transition: background-color 0.2s ease-in-out; }
-        #channel-list li:hover { background-color: #e9efff; }
-        #channel-list li.active { background-color: #4a76e8; color: white; font-weight: bold; }
-        #main-content { flex-grow: 1; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-        video { width: 100%; max-width: 1000px; background-color: #000; border: 1px solid #ccc; border-radius: 5px; }
-        #status { margin-top: 15px; font-size: 1.1em; color: #555; min-height: 24px; text-align: center; }
+        #channel-list li {
+            padding: 12px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.2s ease-in-out;
+            border-left: 4px solid transparent;
+        }
+        /* Style for the currently playing channel */
+        #channel-list li.active {
+            font-weight: bold;
+            background-color: #e9efff;
+        }
+        /* Style for the remote-controlled highlighted channel */
+        #channel-list li.highlighted {
+            background-color: #4a76e8;
+            color: white;
+            border-left: 4px solid #1a4fd8;
+        }
+        #main-content {
+            flex-grow: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #videoPlayer {
+            width: 100%;
+            max-width: 1000px;
+            background-color: #000;
+            border-radius: 5px;
+            transition: box-shadow 0.3s ease;
+        }
+        /* Visual feedback for when the video player has focus */
+        #videoPlayer.focused {
+             box-shadow: 0 0 10px 3px rgba(74, 118, 232, 0.7);
+        }
+        #status {
+            margin-top: 15px;
+            font-size: 1.1em;
+            color: #555;
+            min-height: 24px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -30,122 +94,218 @@
     </div>
 
 <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        const video = document.getElementById('videoPlayer');
-        const channelList = document.getElementById('channel-list');
-        const statusEl = document.getElementById('status');
-        
-        let websocket;
-        let mediaSource;
-        let sourceBuffer;
-        let bufferQueue = [];
-        let isAppending = false;
+document.addEventListener('DOMContentLoaded', () => {
+    // DOM Elements
+    const video = document.getElementById('videoPlayer');
+    const channelList = document.getElementById('channel-list');
+    const sidebar = document.getElementById('sidebar');
+    const statusEl = document.getElementById('status');
+    
+    // State Management
+    let focusState = 'SIDEBAR'; // Can be 'SIDEBAR' or 'PLAYER'
+    let websocket;
+    let mediaSource;
+    let sourceBuffer;
+    let bufferQueue = [];
+    let isAppending = false;
 
-        // CRITICAL: This codec string must match the stream's video and audio codecs.
-        // The default value is common for H.264 video and AAC audio.
-        // You may need to inspect a channel's manifest (MPD) file to find the correct value if video doesn't play.
-        const mimeCodec = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
+    const mimeCodec = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
 
-        fetch('/api/channels')
-            .then(response => {
-                if (!response.ok) throw new Error(`Server error: ${response.statusText}`);
-                return response.json();
-            })
-            .then(data => {
-                if (data.error) throw new Error(data.error);
-                channelList.innerHTML = ''; // Clear "Loading..."
-                data.forEach(channel => {
-                    const li = document.createElement('li');
-                    li.textContent = channel.title;
-                    li.dataset.id = channel.id;
-                    li.onclick = () => playChannel(channel.id, channel.title, li);
-                    channelList.appendChild(li);
-                });
-            })
-            .catch(error => {
-                channelList.innerHTML = '';
-                statusEl.textContent = `Error: ${error.message}`;
-                console.error("Failed to load channels:", error);
+    // --- INITIALIZATION ---
+    fetch('/api/channels')
+        .then(response => { if (!response.ok) throw new Error(`Server error: ${response.statusText}`); return response.json(); })
+        .then(data => {
+            if (data.error) throw new Error(data.error);
+            channelList.innerHTML = '';
+            data.forEach(channel => {
+                const li = document.createElement('li');
+                li.textContent = channel.title;
+                li.dataset.id = channel.id;
+                li.onclick = () => playChannel(channel, li);
+                channelList.appendChild(li);
             });
-
-        function playChannel(channelId, channelTitle, element) {
-            document.querySelectorAll('#channel-list li').forEach(el => el.classList.remove('active'));
-            element.classList.add('active');
-            statusEl.textContent = `Initializing stream for ${channelTitle}...`;
-            resetPlayer();
-            initializeMediaSource(channelId);
-        }
-
-        function resetPlayer() {
-            if (websocket && websocket.readyState === WebSocket.OPEN) websocket.close();
-            bufferQueue = [];
-            isAppending = false;
-            if (mediaSource && mediaSource.readyState === 'open') {
-                try { mediaSource.endOfStream(); } catch (e) {}
+            // Highlight the first channel and set initial focus
+            if (channelList.children.length > 0) {
+                channelList.children[0].classList.add('highlighted');
+                setFocus('SIDEBAR');
             }
-            video.pause();
-            video.removeAttribute('src');
-            video.load();
-        }
+        })
+        .catch(error => {
+            channelList.innerHTML = '';
+            statusEl.textContent = `Error: ${error.message}`;
+        });
 
-        function initializeMediaSource(channelId) {
-            if (!MediaSource.isTypeSupported(mimeCodec)) {
-                statusEl.textContent = 'Error: Browser does not support the required video codec.';
-                console.error('Unsupported MIME type or codec: ', mimeCodec);
-                return;
-            }
-            mediaSource = new MediaSource();
-            video.src = URL.createObjectURL(mediaSource);
-            mediaSource.addEventListener('sourceopen', () => {
-                sourceBuffer = mediaSource.addSourceBuffer(mimeCodec);
-                sourceBuffer.addEventListener('updateend', processBufferQueue);
-                connectWebSocket(channelId);
-            });
-        }
+    // --- CORE REMOTE CONTROL LOGIC ---
+    document.addEventListener('keydown', (event) => {
+        // Prevent default browser actions for arrow keys, space, etc.
+        event.preventDefault();
 
-        function connectWebSocket(channelId) {
-            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${wsProtocol}//${window.location.hostname}:${WEBSOCKET_PORT}/ws/${channelId}`;
-            statusEl.textContent = 'Connecting to stream server...';
-            websocket = new WebSocket(wsUrl);
-            websocket.binaryType = 'arraybuffer';
-            websocket.onopen = () => { statusEl.textContent = 'Connection established. Waiting for video data...'; };
-            websocket.onmessage = (event) => {
-                bufferQueue.push(event.data);
-                if (!isAppending) processBufferQueue();
-            };
-            websocket.onclose = (event) => {
-                statusEl.textContent = `Stream disconnected. (Code: ${event.code})`;
-                if (mediaSource && mediaSource.readyState === 'open') {
-                    try { mediaSource.endOfStream(); } catch(e) {}
-                }
-            };
-            websocket.onerror = (error) => {
-                statusEl.textContent = 'A WebSocket error occurred. See console for details.';
-                console.error('WebSocket Error: ', error);
-            };
+        if (focusState === 'SIDEBAR') {
+            handleSidebarKeys(event.key);
+        } else if (focusState === 'PLAYER') {
+            handlePlayerKeys(event.key);
         }
-
-        function processBufferQueue() {
-            if (!isAppending && bufferQueue.length > 0 && sourceBuffer && !sourceBuffer.updating) {
-                isAppending = true;
-                const data = bufferQueue.shift();
-                try {
-                    sourceBuffer.appendBuffer(data);
-                    if (video.paused) { video.play().catch(e => console.warn("Autoplay was prevented:", e)); }
-                } catch (e) {
-                    console.error('Error appending buffer:', e);
-                    isAppending = false;
-                    resetPlayer();
-                    statusEl.textContent = `Error playing video. (Reason: ${e.name})`;
-                }
-            } else {
-                isAppending = false;
-            }
-        }
-        // Expose the websocket port to the script
-        const WEBSOCKET_PORT = {{ WEBSOCKET_PORT }};
     });
+
+    function handleSidebarKeys(key) {
+        switch (key) {
+            case 'ArrowUp':
+                updateHighlight('up');
+                break;
+            case 'ArrowDown':
+                updateHighlight('down');
+                break;
+            case 'Enter':
+                const highlighted = channelList.querySelector('.highlighted');
+                if (highlighted) {
+                    highlighted.click(); // This will call playChannel
+                }
+                break;
+        }
+    }
+
+    function handlePlayerKeys(key) {
+        switch (key) {
+            case 'ArrowLeft':
+                video.currentTime -= 10; // Seek back 10 seconds
+                break;
+            case 'ArrowRight':
+                video.currentTime += 10; // Seek forward 10 seconds
+                break;
+            case ' ': // Spacebar for Play/Pause
+                 if (video.paused) video.play(); else video.pause();
+                break;
+            case 'f': // 'f' for Fullscreen
+                toggleFullscreen();
+                break;
+            case 'Backspace':
+                setFocus('SIDEBAR');
+                break;
+        }
+    }
+
+    // --- HELPER FUNCTIONS ---
+
+    function setFocus(newState) {
+        focusState = newState;
+        if (newState === 'SIDEBAR') {
+            sidebar.classList.add('focused');
+            video.classList.remove('focused');
+        } else { // PLAYER
+            sidebar.classList.remove('focused');
+            video.classList.add('focused');
+        }
+    }
+
+    function updateHighlight(direction) {
+        let current = channelList.querySelector('.highlighted');
+        if (!current) {
+            current = channelList.children[0];
+            if(current) current.classList.add('highlighted');
+            return;
+        }
+
+        let next = direction === 'up' ? current.previousElementSibling : current.nextElementSibling;
+
+        if (next) {
+            current.classList.remove('highlighted');
+            next.classList.add('highlighted');
+            // Ensure the highlighted item is always visible
+            next.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+
+    function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            video.requestFullscreen().catch(err => {
+                alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+            });
+        } else {
+            document.exitFullscreen();
+        }
+    }
+
+    // --- STREAMING LOGIC (Modified to manage focus) ---
+
+    function playChannel(channel, element) {
+        document.querySelectorAll('#channel-list li').forEach(el => el.classList.remove('active'));
+        element.classList.add('active');
+
+        statusEl.textContent = `Initializing stream for ${channel.title}...`;
+        resetPlayer();
+        initializeMediaSource(channel.id);
+        
+        // IMPORTANT: Switch focus to the player after starting a stream
+        setFocus('PLAYER');
+    }
+    
+    // (The rest of the streaming functions are the same as before)
+
+    function resetPlayer() {
+        if (websocket && websocket.readyState === WebSocket.OPEN) websocket.close();
+        bufferQueue = [];
+        isAppending = false;
+        if (mediaSource && mediaSource.readyState === 'open') {
+            try { mediaSource.endOfStream(); } catch (e) {}
+        }
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+    }
+
+    function initializeMediaSource(channelId) {
+        if (!MediaSource.isTypeSupported(mimeCodec)) {
+            statusEl.textContent = 'Error: Browser does not support the required video codec.';
+            return;
+        }
+        mediaSource = new MediaSource();
+        video.src = URL.createObjectURL(mediaSource);
+        mediaSource.addEventListener('sourceopen', () => {
+            sourceBuffer = mediaSource.addSourceBuffer(mimeCodec);
+            sourceBuffer.addEventListener('updateend', processBufferQueue);
+            connectWebSocket(channelId);
+        });
+    }
+
+    function connectWebSocket(channelId) {
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        // The port is hardcoded to match the server configuration
+        const wsPort = 8765; 
+        const wsUrl = `${wsProtocol}//${window.location.hostname}:${wsPort}/ws/${channelId}`;
+
+        statusEl.textContent = 'Connecting to stream server...';
+        websocket = new WebSocket(wsUrl);
+        websocket.binaryType = 'arraybuffer';
+        websocket.onopen = () => { statusEl.textContent = 'Connection established. Waiting for video data...'; };
+        websocket.onmessage = (event) => {
+            bufferQueue.push(event.data);
+            if (!isAppending) processBufferQueue();
+        };
+        websocket.onclose = (event) => { statusEl.textContent = `Stream disconnected. (Code: ${event.code})`; };
+        websocket.onerror = (error) => {
+            statusEl.textContent = 'A WebSocket error occurred. See console for details.';
+            console.error('WebSocket Error: ', error);
+        };
+    }
+
+    function processBufferQueue() {
+        if (!isAppending && bufferQueue.length > 0 && sourceBuffer && !sourceBuffer.updating) {
+            isAppending = true;
+            try {
+                const data = bufferQueue.shift();
+                sourceBuffer.appendBuffer(data);
+                if (video.paused) { video.play().catch(e => console.warn("Autoplay was prevented:", e)); }
+            } catch (e) {
+                console.error('Error appending buffer:', e);
+                isAppending = false;
+                resetPlayer();
+                statusEl.textContent = `Error playing video. (Reason: ${e.name})`;
+            }
+        } else {
+            isAppending = false;
+        }
+    }
+});
 </script>
 </body>
 </html>
