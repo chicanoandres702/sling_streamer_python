@@ -1,7 +1,10 @@
 # requirements.txt
-flask
 requests
 pyjwt
+websockets==10.4
+flask
 pywidevine
-websockets
-click
+m3u8
+pystray
+Pillow
+pyinstaller
