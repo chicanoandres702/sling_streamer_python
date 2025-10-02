@@ -50,6 +50,7 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 WVD_FILE = resource_path('WVD.wvd')
+FFMPEG_BIN = resource_path('ffmpeg.exe')
 HTTP_HOST = '0.0.0.0'
 HTTP_PORT = 8000
 WEBSOCKET_HOST = '0.0.0.0'
@@ -323,7 +324,7 @@ class FFmpegProcess:
 
             # Build FFmpeg commands
             video_cmd = [
-                'ffmpeg', '-y',
+                FFMPEG_BIN, '-y',
                 *decryption_args,
                 '-i', f'tcp://127.0.0.1:{video_port}?timeout=10000000',
                 '-c:v', 'copy',
@@ -333,7 +334,7 @@ class FFmpegProcess:
             ]
             
             audio_cmd = [
-                'ffmpeg', '-y',
+                FFMPEG_BIN, '-y',
                 *decryption_args,
                 '-i', f'tcp://127.0.0.1:{audio_port}?timeout=10000000',
                 '-c:a', 'copy',
@@ -345,7 +346,7 @@ class FFmpegProcess:
             # --- MODIFICATION START ---
             # This muxer command now includes timestamp-based synchronization flags.
             muxer_cmd = [
-                'ffmpeg', '-y',
+                FFMPEG_BIN, '-y',
                 '-i', f'tcp://127.0.0.1:{video_mux_port}?timeout=10000000',
                 '-i', f'tcp://127.0.0.1:{audio_mux_port}?timeout=10000000',
                 '-map', '0:v',
