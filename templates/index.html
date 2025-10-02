@@ -4,462 +4,496 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sling TV Player</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            color: #fff;
-            height: 100vh;
-            overflow: hidden;
-        }
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        color: #fff;
+        height: 100vh;
+        overflow: hidden;
+    }
 
-        .app-container {
-            display: flex;
-            height: 100vh;
-        }
+    .app-container {
+        display: flex;
+        height: 100vh;
+    }
 
-        /* Left Panel - Channel List */
+    /* Left Panel - Channel List */
+    .channel-panel {
+        width: 300px;
+        background: rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(10px);
+        border-right: 1px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        /* MODIFIED: Animate margin-left instead of transform for proper layout reflow */
+        transition: margin-left 0.3s ease;
+        /* ADDED: Prevent the panel from shrinking when the window is too narrow */
+        flex-shrink: 0; 
+    }
+
+    /* REMOVED: This rule is replaced by the new rule below */
+    /*
+    .channel-panel.hidden {
+        transform: translateX(-100%);
+    }
+    */
+
+    /* ADDED: New rule to hide the sidebar by pulling it out of the layout flow */
+    .app-container.sidebar-hidden .channel-panel {
+        margin-left: -300px;
+    }
+
+    body:fullscreen .channel-panel,
+    body:-webkit-full-screen .channel-panel,
+    body:-moz-full-screen .channel-panel,
+    body:-ms-fullscreen .channel-panel {
+        /* This transform is still useful for instantly hiding in fullscreen */
+        transform: translateX(-100%); 
+    }
+
+    .panel-header {
+        background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+        padding: 1.5rem;
+        flex-shrink: 0;
+    }
+
+    .panel-header h2 {
+        font-size: 1.2rem;
+        font-weight: 600;
+        letter-spacing: -0.5px;
+    }
+
+    .search-box {
+        margin-top: 1rem;
+        position: relative;
+    }
+
+    .search-box input {
+        width: 100%;
+        padding: 0.75rem 1rem 0.75rem 2.5rem;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+        color: #fff;
+        font-size: 0.9rem;
+    }
+
+    .search-box input::placeholder {
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    .search-box input:focus {
+        outline: none;
+        border-color: rgba(255, 255, 255, 0.4);
+        background: rgba(255, 255, 255, 0.15);
+    }
+
+    .search-box::before {
+        content: '🔍';
+        position: absolute;
+        left: 0.75rem;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 0.9rem;
+    }
+
+    .channel-count {
+        padding: 0.75rem 1.5rem;
+        font-size: 0.85rem;
+        color: rgba(255, 255, 255, 0.6);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .channel-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0.5rem;
+        scroll-behavior: smooth;
+    }
+
+    .channel-list::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .channel-list::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    .channel-list::-webkit-scrollbar-thumb {
+        background: rgba(255, 107, 53, 0.5);
+        border-radius: 4px;
+    }
+
+    .channel-list::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 107, 53, 0.7);
+    }
+
+    .channel-item {
+        padding: 1rem;
+        margin-bottom: 0.5rem;
+        background: rgba(255, 255, 255, 0.05);
+        border: 2px solid transparent;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        outline: none;
+    }
+
+    .channel-item:hover {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 107, 53, 0.3);
+        transform: translateX(4px);
+    }
+
+    .channel-item.focused {
+        background: rgba(255, 255, 255, 0.15);
+        border-color: #00d4ff;
+        box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+        transform: translateX(8px) scale(1.02);
+    }
+
+    .channel-item.active {
+        background: linear-gradient(135deg, rgba(255, 107, 53, 0.3) 0%, rgba(247, 147, 30, 0.3) 100%);
+        border-color: #ff6b35;
+    }
+
+    .channel-item.active.focused {
+        border-color: #00d4ff;
+        box-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+    }
+
+    .channel-name {
+        font-weight: 500;
+        font-size: 0.95rem;
+        display: block;
+        margin-bottom: 0.25rem;
+    }
+
+    .channel-id {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.5);
+        font-family: monospace;
+    }
+
+    .loading-state, .error-state {
+        padding: 2rem 1.5rem;
+        text-align: center;
+        color: rgba(255, 255, 255, 0.6);
+    }
+
+    .loading-state::before {
+        content: '⟳';
+        display: block;
+        font-size: 2rem;
+        margin-bottom: 1rem;
+        animation: spin 2s linear infinite;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* Right Panel - Video Player */
+    .player-panel {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        background: rgba(0, 0, 0, 0.2);
+        /* ADDED: Add a transition for smooth resizing */
+        transition: width 0.3s ease; 
+    }
+
+    .player-header {
+        background: rgba(0, 0, 0, 0.4);
+        padding: 1.5rem 2rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    body:fullscreen .player-header,
+    body:-webkit-full-screen .player-header,
+    body:-moz-full-screen .player-header,
+    body:-ms-fullscreen .player-header {
+        display: none;
+    }
+
+    .player-title {
+        flex: 1;
+    }
+
+    .player-header h1 {
+        font-size: 1.8rem;
+        font-weight: 600;
+        letter-spacing: -0.5px;
+    }
+
+    .current-channel {
+        margin-top: 0.5rem;
+        font-size: 0.9rem;
+        color: rgba(255, 255, 255, 0.6);
+    }
+
+    .header-controls {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .control-button {
+        padding: 0.75rem 1.25rem;
+        background: rgba(255, 255, 255, 0.1);
+        border: 2px solid transparent;
+        border-radius: 8px;
+        color: #fff;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .control-button:hover {
+        background: rgba(255, 255, 255, 0.15);
+        border-color: rgba(255, 107, 53, 0.5);
+    }
+
+    .control-button:focus {
+        outline: none;
+        border-color: #00d4ff;
+        box-shadow: 0 0 15px rgba(0, 212, 255, 0.4);
+    }
+
+    .control-button.fullscreen-btn {
+        background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+    }
+
+    .video-wrapper {
+        flex: 1;
+        position: relative;
+        background: #000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    video {
+        width: 100%;
+        height: 100%;
+        display: block;
+    }
+
+    .loading-spinner {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 64px;
+        height: 64px;
+        border: 4px solid rgba(255, 255, 255, 0.1);
+        border-top-color: #ff6b35;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        display: none;
+        z-index: 10;
+    }
+
+    .loading-spinner.active { display: block; }
+
+    .empty-state {
+        text-align: center;
+        color: rgba(255, 255, 255, 0.4);
+    }
+
+    .empty-state-icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        opacity: 0.3;
+    }
+
+    .empty-state-text {
+        font-size: 1.1rem;
+    }
+
+    .status-bar {
+        padding: 1rem 2rem;
+        background: rgba(0, 0, 0, 0.5);
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    body:fullscreen .status-bar,
+    body:-webkit-full-screen .status-bar,
+    body:-moz-full-screen .status-bar,
+    body:-ms-fullscreen .status-bar {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(0, 0, 0, 0.8);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+
+    body:fullscreen .status-bar:hover,
+    body:-webkit-full-screen .status-bar:hover,
+    body:-moz-full-screen .status-bar:hover,
+    body:-ms-fullscreen .status-bar:hover {
+        opacity: 1;
+    }
+
+    .status-icon {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .status-icon.idle { background: #6c757d; }
+    .status-icon.connecting { 
+        background: #ffc107;
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+    .status-icon.streaming { background: #28a745; }
+    .status-icon.error { background: #dc3545; }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+    }
+
+    .status-text {
+        font-size: 0.9rem;
+        color: rgba(255, 255, 255, 0.8);
+    }
+
+    /* Remote Control Hint */
+    .remote-hint {
+        position: fixed;
+        bottom: 2rem;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.8);
+        padding: 1rem 2rem;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        color: rgba(255, 255, 255, 0.7);
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        z-index: 1000;
+    }
+
+    .remote-hint.show {
+        opacity: 1;
+    }
+
+    body:fullscreen .remote-hint,
+    body:-webkit-full-screen .remote-hint,
+    body:-moz-full-screen .remote-hint,
+    body:-ms-fullscreen .remote-hint {
+        display: none;
+    }
+
+    /* Fullscreen Overlay Controls */
+    .fullscreen-controls {
+        position: absolute;
+        top: 2rem;
+        right: 2rem;
+        display: none;
+        gap: 1rem;
+        z-index: 100;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+
+    body:fullscreen .fullscreen-controls,
+    body:-webkit-full-screen .fullscreen-controls,
+    body:-moz-full-screen .fullscreen-controls,
+    body:-ms-fullscreen .fullscreen-controls {
+        display: flex;
+    }
+
+    .video-wrapper:hover .fullscreen-controls {
+        opacity: 1;
+    }
+
+    .fs-button {
+        padding: 0.75rem 1.25rem;
+        background: rgba(0, 0, 0, 0.7);
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 8px;
+        color: #fff;
+        cursor: pointer;
+        font-size: 0.9rem;
+        transition: all 0.3s ease;
+    }
+
+    .fs-button:hover {
+        background: rgba(255, 107, 53, 0.8);
+        border-color: #ff6b35;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 1024px) {
         .channel-panel {
-            width: 300px;
-            background: rgba(0, 0, 0, 0.4);
-            backdrop-filter: blur(10px);
-            border-right: 1px solid rgba(255, 255, 255, 0.1);
-            display: flex;
+            width: 250px;
+        }
+
+        /* ADDED: The corresponding negative margin for this breakpoint */
+        .app-container.sidebar-hidden .channel-panel {
+            margin-left: -250px;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .app-container {
             flex-direction: column;
-            overflow: hidden;
-            transition: transform 0.3s ease;
         }
 
-        .channel-panel.hidden {
-            transform: translateX(-100%);
-        }
-
-        body:fullscreen .channel-panel,
-        body:-webkit-full-screen .channel-panel,
-        body:-moz-full-screen .channel-panel,
-        body:-ms-fullscreen .channel-panel {
-            transform: translateX(-100%);
-        }
-
-        .panel-header {
-            background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
-            padding: 1.5rem;
-            flex-shrink: 0;
-        }
-
-        .panel-header h2 {
-            font-size: 1.2rem;
-            font-weight: 600;
-            letter-spacing: -0.5px;
-        }
-
-        .search-box {
-            margin-top: 1rem;
-            position: relative;
-        }
-
-        .search-box input {
+        .channel-panel {
             width: 100%;
-            padding: 0.75rem 1rem 0.75rem 2.5rem;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 8px;
-            color: #fff;
-            font-size: 0.9rem;
-        }
-
-        .search-box input::placeholder {
-            color: rgba(255, 255, 255, 0.5);
-        }
-
-        .search-box input:focus {
-            outline: none;
-            border-color: rgba(255, 255, 255, 0.4);
-            background: rgba(255, 255, 255, 0.15);
-        }
-
-        .search-box::before {
-            content: '🔍';
-            position: absolute;
-            left: 0.75rem;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 0.9rem;
-        }
-
-        .channel-count {
-            padding: 0.75rem 1.5rem;
-            font-size: 0.85rem;
-            color: rgba(255, 255, 255, 0.6);
+            height: 40vh;
+            border-right: none;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            /* Reset margin for vertical layout */
+            margin-left: 0 !important; 
         }
 
-        .channel-list {
-            flex: 1;
-            overflow-y: auto;
-            padding: 0.5rem;
-            scroll-behavior: smooth;
+        .player-panel {
+            height: 60vh;
         }
 
-        .channel-list::-webkit-scrollbar {
-            width: 8px;
+        /* In mobile view, we hide with height/transform instead of margin */
+        .app-container.sidebar-hidden .channel-panel {
+            height: 0;
+            min-height: 0;
+            transform: translateY(-100%);
+            border-bottom: none;
+            padding-top: 0;
+            padding-bottom: 0;
         }
-
-        .channel-list::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.05);
-        }
-
-        .channel-list::-webkit-scrollbar-thumb {
-            background: rgba(255, 107, 53, 0.5);
-            border-radius: 4px;
-        }
-
-        .channel-list::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 107, 53, 0.7);
-        }
-
-        .channel-item {
-            padding: 1rem;
-            margin-bottom: 0.5rem;
-            background: rgba(255, 255, 255, 0.05);
-            border: 2px solid transparent;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            outline: none;
+        .app-container.sidebar-hidden .player-panel {
+            height: 100vh;
         }
 
         .channel-item:hover {
-            background: rgba(255, 255, 255, 0.1);
-            border-color: rgba(255, 107, 53, 0.3);
-            transform: translateX(4px);
+            transform: translateX(0);
+            transform: translateY(-2px);
         }
 
         .channel-item.focused {
-            background: rgba(255, 255, 255, 0.15);
-            border-color: #00d4ff;
-            box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
-            transform: translateX(8px) scale(1.02);
+            transform: translateY(-2px) scale(1.02);
         }
-
-        .channel-item.active {
-            background: linear-gradient(135deg, rgba(255, 107, 53, 0.3) 0%, rgba(247, 147, 30, 0.3) 100%);
-            border-color: #ff6b35;
-        }
-
-        .channel-item.active.focused {
-            border-color: #00d4ff;
-            box-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
-        }
-
-        .channel-name {
-            font-weight: 500;
-            font-size: 0.95rem;
-            display: block;
-            margin-bottom: 0.25rem;
-        }
-
-        .channel-id {
-            font-size: 0.75rem;
-            color: rgba(255, 255, 255, 0.5);
-            font-family: monospace;
-        }
-
-        .loading-state, .error-state {
-            padding: 2rem 1.5rem;
-            text-align: center;
-            color: rgba(255, 255, 255, 0.6);
-        }
-
-        .loading-state::before {
-            content: '⟳';
-            display: block;
-            font-size: 2rem;
-            margin-bottom: 1rem;
-            animation: spin 2s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* Right Panel - Video Player */
-        .player-panel {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            background: rgba(0, 0, 0, 0.2);
-        }
-
-        .player-header {
-            background: rgba(0, 0, 0, 0.4);
-            padding: 1.5rem 2rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        body:fullscreen .player-header,
-        body:-webkit-full-screen .player-header,
-        body:-moz-full-screen .player-header,
-        body:-ms-fullscreen .player-header {
-            display: none;
-        }
-
-        .player-title {
-            flex: 1;
-        }
-
-        .player-header h1 {
-            font-size: 1.8rem;
-            font-weight: 600;
-            letter-spacing: -0.5px;
-        }
-
-        .current-channel {
-            margin-top: 0.5rem;
-            font-size: 0.9rem;
-            color: rgba(255, 255, 255, 0.6);
-        }
-
-        .header-controls {
-            display: flex;
-            gap: 0.5rem;
-        }
-
-        .control-button {
-            padding: 0.75rem 1.25rem;
-            background: rgba(255, 255, 255, 0.1);
-            border: 2px solid transparent;
-            border-radius: 8px;
-            color: #fff;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 0.9rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .control-button:hover {
-            background: rgba(255, 255, 255, 0.15);
-            border-color: rgba(255, 107, 53, 0.5);
-        }
-
-        .control-button:focus {
-            outline: none;
-            border-color: #00d4ff;
-            box-shadow: 0 0 15px rgba(0, 212, 255, 0.4);
-        }
-
-        .control-button.fullscreen-btn {
-            background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
-        }
-
-        .video-wrapper {
-            flex: 1;
-            position: relative;
-            background: #000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        video {
-            width: 100%;
-            height: 100%;
-            display: block;
-        }
-
-        .loading-spinner {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 64px;
-            height: 64px;
-            border: 4px solid rgba(255, 255, 255, 0.1);
-            border-top-color: #ff6b35;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            display: none;
-            z-index: 10;
-        }
-
-        .loading-spinner.active { display: block; }
-
-        .empty-state {
-            text-align: center;
-            color: rgba(255, 255, 255, 0.4);
-        }
-
-        .empty-state-icon {
-            font-size: 4rem;
-            margin-bottom: 1rem;
-            opacity: 0.3;
-        }
-
-        .empty-state-text {
-            font-size: 1.1rem;
-        }
-
-        .status-bar {
-            padding: 1rem 2rem;
-            background: rgba(0, 0, 0, 0.5);
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        body:fullscreen .status-bar,
-        body:-webkit-full-screen .status-bar,
-        body:-moz-full-screen .status-bar,
-        body:-ms-fullscreen .status-bar {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: rgba(0, 0, 0, 0.8);
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-
-        body:fullscreen .status-bar:hover,
-        body:-webkit-full-screen .status-bar:hover,
-        body:-moz-full-screen .status-bar:hover,
-        body:-ms-fullscreen .status-bar:hover {
-            opacity: 1;
-        }
-
-        .status-icon {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            flex-shrink: 0;
-        }
-
-        .status-icon.idle { background: #6c757d; }
-        .status-icon.connecting { 
-            background: #ffc107;
-            animation: pulse 1.5s ease-in-out infinite;
-        }
-        .status-icon.streaming { background: #28a745; }
-        .status-icon.error { background: #dc3545; }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
-        }
-
-        .status-text {
-            font-size: 0.9rem;
-            color: rgba(255, 255, 255, 0.8);
-        }
-
-        /* Remote Control Hint */
-        .remote-hint {
-            position: fixed;
-            bottom: 2rem;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.8);
-            padding: 1rem 2rem;
-            border-radius: 8px;
-            font-size: 0.85rem;
-            color: rgba(255, 255, 255, 0.7);
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-            z-index: 1000;
-        }
-
-        .remote-hint.show {
-            opacity: 1;
-        }
-
-        body:fullscreen .remote-hint,
-        body:-webkit-full-screen .remote-hint,
-        body:-moz-full-screen .remote-hint,
-        body:-ms-fullscreen .remote-hint {
-            display: none;
-        }
-
-        /* Fullscreen Overlay Controls */
-        .fullscreen-controls {
-            position: absolute;
-            top: 2rem;
-            right: 2rem;
-            display: none;
-            gap: 1rem;
-            z-index: 100;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-
-        body:fullscreen .fullscreen-controls,
-        body:-webkit-full-screen .fullscreen-controls,
-        body:-moz-full-screen .fullscreen-controls,
-        body:-ms-fullscreen .fullscreen-controls {
-            display: flex;
-        }
-
-        .video-wrapper:hover .fullscreen-controls {
-            opacity: 1;
-        }
-
-        .fs-button {
-            padding: 0.75rem 1.25rem;
-            background: rgba(0, 0, 0, 0.7);
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 8px;
-            color: #fff;
-            cursor: pointer;
-            font-size: 0.9rem;
-            transition: all 0.3s ease;
-        }
-
-        .fs-button:hover {
-            background: rgba(255, 107, 53, 0.8);
-            border-color: #ff6b35;
-        }
-
-        /* Responsive Design */
-        @media (max-width: 1024px) {
-            .channel-panel {
-                width: 250px;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .app-container {
-                flex-direction: column;
-            }
-
-            .channel-panel {
-                width: 100%;
-                height: 40vh;
-                border-right: none;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            }
-
-            .player-panel {
-                height: 60vh;
-            }
-
-            .channel-item:hover {
-                transform: translateX(0);
-                transform: translateY(-2px);
-            }
-
-            .channel-item.focused {
-                transform: translateY(-2px) scale(1.02);
-            }
-        }
-    </style>
+    }
+</style>
 </head>
 <body>
     <div class="app-container">
@@ -522,540 +556,456 @@
         ⬆️ ⬇️ Navigate • Enter/OK to Play • F for Fullscreen • Esc to Exit
     </div>
 
-    <script>
-        const elements = {
-            channelList: document.getElementById('channel-list'),
-            channelCount: document.getElementById('channel-count'),
-            channelSearch: document.getElementById('channel-search'),
-            videoPlayer: document.getElementById('video-player'),
-            videoWrapper: document.getElementById('video-wrapper'),
-            emptyState: document.getElementById('empty-state'),
-            currentChannel: document.getElementById('current-channel'),
-            statusText: document.getElementById('status-text'),
-            statusIcon: document.getElementById('status-icon'),
-            loadingSpinner: document.getElementById('loading-spinner'),
-            channelPanel: document.getElementById('channel-panel'),
-            fullscreenBtn: document.getElementById('fullscreen-btn'),
-            fsExitBtn: document.getElementById('fs-exit-btn'),
-            togglePanelBtn: document.getElementById('toggle-panel-btn'),
-            remoteHint: document.getElementById('remote-hint')
-        };
+<script>
+    const elements = {
+        // MODIFIED: Added reference to the main container
+        appContainer: document.querySelector('.app-container'),
 
-        let websocket = null;
-        let allChannels = [];
-        let filteredChannels = [];
-        let currentChannelId = null;
-        let focusedIndex = 0;
+        channelList: document.getElementById('channel-list'),
+        channelCount: document.getElementById('channel-count'),
+        channelSearch: document.getElementById('channel-search'),
+        videoPlayer: document.getElementById('video-player'),
+        videoWrapper: document.getElementById('video-wrapper'),
+        emptyState: document.getElementById('empty-state'),
+        currentChannel: document.getElementById('current-channel'),
+        statusText: document.getElementById('status-text'),
+        statusIcon: document.getElementById('status-icon'),
+        loadingSpinner: document.getElementById('loading-spinner'),
+        channelPanel: document.getElementById('channel-panel'),
+        fullscreenBtn: document.getElementById('fullscreen-btn'),
+        fsExitBtn: document.getElementById('fs-exit-btn'),
+        togglePanelBtn: document.getElementById('toggle-panel-btn'),
+        remoteHint: document.getElementById('remote-hint')
+    };
 
-        const STATUS = {
-            IDLE: 'idle',
-            CONNECTING: 'connecting',
-            STREAMING: 'streaming',
-            ERROR: 'error'
-        };
+    let websocket = null;
+    let allChannels = [];
+    let filteredChannels = [];
+    let currentChannelId = null;
+    let focusedIndex = 0;
 
-        function setStatus(status, message) {
-            elements.statusText.textContent = message;
-            elements.statusIcon.className = `status-icon ${status}`;
+    const STATUS = {
+        IDLE: 'idle',
+        CONNECTING: 'connecting',
+        STREAMING: 'streaming',
+        ERROR: 'error'
+    };
+
+    function setStatus(status, message) {
+        elements.statusText.textContent = message;
+        elements.statusIcon.className = `status-icon ${status}`;
+    }
+
+    function setLoading(isLoading) {
+        elements.loadingSpinner.classList.toggle('active', isLoading);
+    }
+
+    function renderChannels(channels) {
+        filteredChannels = channels;
+        
+        if (channels.length === 0) {
+            elements.channelList.innerHTML = '<div class="error-state">No channels found</div>';
+            return;
         }
 
-        function setLoading(isLoading) {
-            elements.loadingSpinner.classList.toggle('active', isLoading);
+        elements.channelList.innerHTML = channels.map((channel, index) => `
+            <div class="channel-item ${index === 0 ? 'focused' : ''}" 
+                 data-channel-id="${channel.id}" 
+                 data-index="${index}"
+                 tabindex="0">
+                <span class="channel-name">${channel.title}</span>
+                <span class="channel-id">${channel.id.substring(0, 8)}...</span>
+            </div>
+        `).join('');
+
+        focusedIndex = 0;
+        attachChannelHandlers();
+    }
+
+    function attachChannelHandlers() {
+        document.querySelectorAll('.channel-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const channelId = item.dataset.channelId;
+                const channel = allChannels.find(c => c.id === channelId);
+                
+                if (channelId === currentChannelId) {
+                    toggleFullscreen();
+                } else {
+                    playChannel(channelId, channel.title);
+                }
+            });
+        });
+    }
+
+    function focusChannel(index) {
+        const items = document.querySelectorAll('.channel-item');
+        if (items.length === 0) return;
+
+        items.forEach(item => item.classList.remove('focused'));
+        focusedIndex = Math.max(0, Math.min(index, items.length - 1));
+        const focusedItem = items[focusedIndex];
+        focusedItem.classList.add('focused');
+        focusedItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function filterChannels(searchTerm) {
+        const filtered = allChannels.filter(channel =>
+            channel.title.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+        renderChannels(filtered);
+        elements.channelCount.textContent = `${filtered.length} of ${allChannels.length} channels`;
+    }
+
+    elements.channelSearch.addEventListener('input', (e) => {
+        filterChannels(e.target.value);
+    });
+
+    // MODIFIED: Toggle class on the parent container
+    elements.togglePanelBtn.addEventListener('click', () => {
+        elements.appContainer.classList.toggle('sidebar-hidden');
+    });
+
+    function toggleFullscreen() {
+        if (!document.fullscreenElement && !document.webkitFullscreenElement && 
+            !document.mozFullScreenElement && !document.msFullscreenElement) {
+            enterFullscreen();
+        } else {
+            exitFullscreen();
         }
+    }
 
-        function renderChannels(channels) {
-            filteredChannels = channels;
-            
-            if (channels.length === 0) {
-                elements.channelList.innerHTML = '<div class="error-state">No channels found</div>';
-                return;
-            }
+    function enterFullscreen() {
+        const elem = document.body;
+        if (elem.requestFullscreen) elem.requestFullscreen();
+        else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
+        else if (elem.mozRequestFullScreen) elem.mozRequestFullScreen();
+        else if (elem.msRequestFullscreen) elem.msRequestFullscreen();
+    }
 
-            elements.channelList.innerHTML = channels.map((channel, index) => `
-                <div class="channel-item ${index === 0 ? 'focused' : ''}" 
-                     data-channel-id="${channel.id}" 
-                     data-index="${index}"
-                     tabindex="0">
-                    <span class="channel-name">${channel.title}</span>
-                    <span class="channel-id">${channel.id.substring(0, 8)}...</span>
-                </div>
-            `).join('');
+    function exitFullscreen() {
+        if (document.exitFullscreen) document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+        else if (document.mozCancelFullScreen) document.mozCancelFullScreen();
+        else if (document.msExitFullscreen) document.msExitFullscreen();
+    }
 
-            focusedIndex = 0;
-            attachChannelHandlers();
-        }
+    elements.fullscreenBtn.addEventListener('click', toggleFullscreen);
+    elements.fsExitBtn.addEventListener('click', exitFullscreen);
 
-        function attachChannelHandlers() {
-            document.querySelectorAll('.channel-item').forEach(item => {
-                item.addEventListener('click', () => {
-                    const channelId = item.dataset.channelId;
+    let remoteHintTimeout;
+    function showRemoteHint() {
+        elements.remoteHint.classList.add('show');
+        clearTimeout(remoteHintTimeout);
+        remoteHintTimeout = setTimeout(() => {
+            elements.remoteHint.classList.remove('show');
+        }, 3000);
+    }
+
+    document.addEventListener('keydown', (e) => {
+        showRemoteHint();
+
+        switch(e.key) {
+            case 'ArrowUp':
+                e.preventDefault();
+                focusChannel(focusedIndex - 1);
+                break;
+            case 'ArrowDown':
+                e.preventDefault();
+                focusChannel(focusedIndex + 1);
+                break;
+            case 'Enter':
+            case 'OK':
+            case ' ':
+                e.preventDefault();
+                const items = document.querySelectorAll('.channel-item');
+                if (items[focusedIndex]) {
+                    const channelId = items[focusedIndex].dataset.channelId;
                     const channel = allChannels.find(c => c.id === channelId);
-                    
-                    // If clicking the same active channel, go fullscreen
                     if (channelId === currentChannelId) {
                         toggleFullscreen();
                     } else {
                         playChannel(channelId, channel.title);
                     }
-                });
-            });
+                }
+                break;
+            case 'Escape':
+            case 'Back':
+                if (document.fullscreenElement) {
+                    exitFullscreen();
+                }
+                break;
+            case 'f':
+            case 'F':
+                e.preventDefault();
+                toggleFullscreen();
+                break;
+            
+            // MODIFIED: Arrow keys now control the parent container's class
+            case 'ArrowLeft':
+                e.preventDefault();
+                elements.appContainer.classList.remove('sidebar-hidden');
+                break;
+            case 'ArrowRight':
+                e.preventDefault();
+                elements.appContainer.classList.add('sidebar-hidden');
+                break;
+
+            case 'Home':
+                e.preventDefault();
+                focusChannel(0);
+                break;
+            case 'End':
+                e.preventDefault();
+                focusChannel(filteredChannels.length - 1);
+                break;
+            case 'PageUp':
+                e.preventDefault();
+                focusChannel(focusedIndex - 5);
+                break;
+            case 'PageDown':
+                e.preventDefault();
+                focusChannel(focusedIndex + 5);
+                break;
         }
+    });
 
-        function focusChannel(index) {
-            const items = document.querySelectorAll('.channel-item');
-            if (items.length === 0) return;
+    let gamepadIndex = null;
+    let lastButtonState = {};
 
-            // Remove previous focus
-            items.forEach(item => item.classList.remove('focused'));
+    function pollGamepad() {
+        const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+        for (let i = 0; i < gamepads.length; i++) {
+            const gamepad = gamepads[i];
+            if (gamepad) {
+                gamepadIndex = i;
+                const axes = gamepad.axes;
+                const buttons = gamepad.buttons;
 
-            // Add new focus
-            focusedIndex = Math.max(0, Math.min(index, items.length - 1));
-            const focusedItem = items[focusedIndex];
-            focusedItem.classList.add('focused');
-
-            // Scroll into view
-            focusedItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-
-        function filterChannels(searchTerm) {
-            const filtered = allChannels.filter(channel =>
-                channel.title.toLowerCase().includes(searchTerm.toLowerCase())
-            );
-            renderChannels(filtered);
-            elements.channelCount.textContent = `${filtered.length} of ${allChannels.length} channels`;
-        }
-
-        // Search functionality
-        elements.channelSearch.addEventListener('input', (e) => {
-            filterChannels(e.target.value);
-        });
-
-        // Toggle channel panel
-        elements.togglePanelBtn.addEventListener('click', () => {
-            elements.channelPanel.classList.toggle('hidden');
-        });
-
-        // Fullscreen functionality
-        function toggleFullscreen() {
-            if (!document.fullscreenElement && !document.webkitFullscreenElement && 
-                !document.mozFullScreenElement && !document.msFullscreenElement) {
-                enterFullscreen();
-            } else {
-                exitFullscreen();
-            }
-        }
-
-        function enterFullscreen() {
-            const elem = document.body;
-            if (elem.requestFullscreen) {
-                elem.requestFullscreen();
-            } else if (elem.webkitRequestFullscreen) {
-                elem.webkitRequestFullscreen();
-            } else if (elem.mozRequestFullScreen) {
-                elem.mozRequestFullScreen();
-            } else if (elem.msRequestFullscreen) {
-                elem.msRequestFullscreen();
-            }
-        }
-
-        function exitFullscreen() {
-            if (document.exitFullscreen) {
-                document.exitFullscreen();
-            } else if (document.webkitExitFullscreen) {
-                document.webkitExitFullscreen();
-            } else if (document.mozCancelFullScreen) {
-                document.mozCancelFullScreen();
-            } else if (document.msExitFullscreen) {
-                document.msExitFullscreen();
-            }
-        }
-
-        elements.fullscreenBtn.addEventListener('click', toggleFullscreen);
-        elements.fsExitBtn.addEventListener('click', exitFullscreen);
-
-        // Keyboard/Remote Control Navigation
-        let remoteHintTimeout;
-        
-        function showRemoteHint() {
-            elements.remoteHint.classList.add('show');
-            clearTimeout(remoteHintTimeout);
-            remoteHintTimeout = setTimeout(() => {
-                elements.remoteHint.classList.remove('show');
-            }, 3000);
-        }
-
-        document.addEventListener('keydown', (e) => {
-            // Show hint on first key press
-            showRemoteHint();
-
-            switch(e.key) {
-                case 'ArrowUp':
-                    e.preventDefault();
-                    focusChannel(focusedIndex - 1);
-                    break;
-
-                case 'ArrowDown':
-                    e.preventDefault();
-                    focusChannel(focusedIndex + 1);
-                    break;
-
-                case 'Enter':
-                case 'OK': // Some remotes send 'OK'
-                case ' ': // Space bar
-                    e.preventDefault();
-                    const items = document.querySelectorAll('.channel-item');
-                    if (items[focusedIndex]) {
-                        const channelId = items[focusedIndex].dataset.channelId;
-                        const channel = allChannels.find(c => c.id === channelId);
-                        
-                        // If selecting the same active channel, go fullscreen
-                        if (channelId === currentChannelId) {
-                            toggleFullscreen();
-                        } else {
-                            playChannel(channelId, channel.title);
-                        }
+                if (axes[1] < -0.5 || (buttons[12] && buttons[12].pressed)) {
+                    if (!lastButtonState.up) {
+                        focusChannel(focusedIndex - 1);
+                        lastButtonState.up = true;
                     }
-                    break;
+                } else {
+                    lastButtonState.up = false;
+                }
+                if (axes[1] > 0.5 || (buttons[13] && buttons[13].pressed)) {
+                    if (!lastButtonState.down) {
+                        focusChannel(focusedIndex + 1);
+                        lastButtonState.down = true;
+                    }
+                } else {
+                    lastButtonState.down = false;
+                }
 
-                case 'Escape':
-                case 'Back': // Some remotes send 'Back'
-                    if (document.fullscreenElement) {
+                // MODIFIED: Gamepad controls now target the parent container's class
+                if (axes[0] < -0.5 || (buttons[14] && buttons[14].pressed)) {
+                    if (!lastButtonState.left) {
+                        elements.appContainer.classList.remove('sidebar-hidden');
+                        lastButtonState.left = true;
+                    }
+                } else {
+                    lastButtonState.left = false;
+                }
+                if (axes[0] > 0.5 || (buttons[15] && buttons[15].pressed)) {
+                    if (!lastButtonState.right) {
+                        elements.appContainer.classList.add('sidebar-hidden');
+                        lastButtonState.right = true;
+                    }
+                } else {
+                    lastButtonState.right = false;
+                }
+
+                if (buttons[0] && buttons[0].pressed) {
+                    if (!lastButtonState.a) {
+                        const items = document.querySelectorAll('.channel-item');
+                        if (items[focusedIndex]) {
+                            const channelId = items[focusedIndex].dataset.channelId;
+                            const channel = allChannels.find(c => c.id === channelId);
+                            if (channelId === currentChannelId) {
+                                toggleFullscreen();
+                            } else {
+                                playChannel(channelId, channel.title);
+                            }
+                        }
+                        lastButtonState.a = true;
+                    }
+                } else {
+                    lastButtonState.a = false;
+                }
+                if (buttons[1] && buttons[1].pressed) {
+                    if (!lastButtonState.b && document.fullscreenElement) {
                         exitFullscreen();
+                        lastButtonState.b = true;
                     }
-                    break;
-
-                case 'f':
-                case 'F':
-                    e.preventDefault();
-                    toggleFullscreen();
-                    break;
-
-                case 'ArrowLeft':
-                    e.preventDefault();
-                    if (elements.channelPanel.classList.contains('hidden')) {
-                        elements.channelPanel.classList.remove('hidden');
+                } else {
+                    lastButtonState.b = false;
+                }
+                if (buttons[9] && buttons[9].pressed) {
+                    if (!lastButtonState.start) {
+                        toggleFullscreen();
+                        lastButtonState.start = true;
                     }
-                    break;
-
-                case 'ArrowRight':
-                    e.preventDefault();
-                    if (!elements.channelPanel.classList.contains('hidden')) {
-                        elements.channelPanel.classList.add('hidden');
-                    }
-                    break;
-
-                case 'Home':
-                    e.preventDefault();
-                    focusChannel(0);
-                    break;
-
-                case 'End':
-                    e.preventDefault();
-                    focusChannel(filteredChannels.length - 1);
-                    break;
-
-                case 'PageUp':
-                    e.preventDefault();
-                    focusChannel(focusedIndex - 5);
-                    break;
-
-                case 'PageDown':
-                    e.preventDefault();
-                    focusChannel(focusedIndex + 5);
-                    break;
-            }
-        });
-
-        // Gamepad/Remote Control Support
-        let gamepadIndex = null;
-        let lastButtonState = {};
-
-        function pollGamepad() {
-            const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
-            
-            for (let i = 0; i < gamepads.length; i++) {
-                const gamepad = gamepads[i];
-                if (gamepad) {
-                    gamepadIndex = i;
-                    
-                    // D-pad or left stick
-                    const axes = gamepad.axes;
-                    const buttons = gamepad.buttons;
-
-                    // Vertical navigation (axis 1 or D-pad up/down)
-                    if (axes[1] < -0.5 || (buttons[12] && buttons[12].pressed)) {
-                        // Up
-                        if (!lastButtonState.up) {
-                            focusChannel(focusedIndex - 1);
-                            lastButtonState.up = true;
-                        }
-                    } else {
-                        lastButtonState.up = false;
-                    }
-
-                    if (axes[1] > 0.5 || (buttons[13] && buttons[13].pressed)) {
-                        // Down
-                        if (!lastButtonState.down) {
-                            focusChannel(focusedIndex + 1);
-                            lastButtonState.down = true;
-                        }
-                    } else {
-                        lastButtonState.down = false;
-                    }
-
-                    // Horizontal navigation (axis 0 or D-pad left/right)
-                    if (axes[0] < -0.5 || (buttons[14] && buttons[14].pressed)) {
-                        // Left - show panel
-                        if (!lastButtonState.left) {
-                            elements.channelPanel.classList.remove('hidden');
-                            lastButtonState.left = true;
-                        }
-                    } else {
-                        lastButtonState.left = false;
-                    }
-
-                    if (axes[0] > 0.5 || (buttons[15] && buttons[15].pressed)) {
-                        // Right - hide panel
-                        if (!lastButtonState.right) {
-                            elements.channelPanel.classList.add('hidden');
-                            lastButtonState.right = true;
-                        }
-                    } else {
-                        lastButtonState.right = false;
-                    }
-
-                    // A button (usually button 0) - Select channel
-                    if (buttons[0] && buttons[0].pressed) {
-                        if (!lastButtonState.a) {
-                            const items = document.querySelectorAll('.channel-item');
-                            if (items[focusedIndex]) {
-                                const channelId = items[focusedIndex].dataset.channelId;
-                                const channel = allChannels.find(c => c.id === channelId);
-                                
-                                if (channelId === currentChannelId) {
-                                    toggleFullscreen();
-                                } else {
-                                    playChannel(channelId, channel.title);
-                                }
-                            }
-                            lastButtonState.a = true;
-                        }
-                    } else {
-                        lastButtonState.a = false;
-                    }
-
-                    // B button (usually button 1) - Exit fullscreen
-                    if (buttons[1] && buttons[1].pressed) {
-                        if (!lastButtonState.b && document.fullscreenElement) {
-                            exitFullscreen();
-                            lastButtonState.b = true;
-                        }
-                    } else {
-                        lastButtonState.b = false;
-                    }
-
-                    // Start button (usually button 9) - Fullscreen toggle
-                    if (buttons[9] && buttons[9].pressed) {
-                        if (!lastButtonState.start) {
-                            toggleFullscreen();
-                            lastButtonState.start = true;
-                        }
-                    } else {
-                        lastButtonState.start = false;
-                    }
+                } else {
+                    lastButtonState.start = false;
                 }
             }
-
-            if (gamepadIndex !== null) {
-                requestAnimationFrame(pollGamepad);
-            }
         }
+        if (gamepadIndex !== null) {
+            requestAnimationFrame(pollGamepad);
+        }
+    }
 
-        // Start gamepad polling when a gamepad is connected
-        window.addEventListener('gamepadconnected', (e) => {
-            console.log('Gamepad connected:', e.gamepad.id);
-            gamepadIndex = e.gamepad.index;
-            pollGamepad();
-            showRemoteHint();
+    window.addEventListener('gamepadconnected', (e) => {
+        console.log('Gamepad connected:', e.gamepad.id);
+        gamepadIndex = e.gamepad.index;
+        pollGamepad();
+        showRemoteHint();
+    });
+
+    window.addEventListener('gamepaddisconnected', (e) => {
+        console.log('Gamepad disconnected');
+        gamepadIndex = null;
+    });
+
+    fetch('/api/channels')
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+        })
+        .then(channels => {
+            allChannels = channels.sort((a, b) => a.title.localeCompare(b.title));
+            renderChannels(allChannels);
+            elements.channelCount.textContent = `${allChannels.length} channels available`;
+            setStatus(STATUS.IDLE, 'Use arrow keys to navigate channels');
+            setTimeout(showRemoteHint, 1000);
+        })
+        .catch(error => {
+            elements.channelList.innerHTML = '<div class="error-state">Failed to load channels</div>';
+            elements.channelCount.textContent = 'Error loading channels';
+            setStatus(STATUS.ERROR, `Error: ${error.message}`);
+            console.error('Channel fetch error:', error);
         });
 
-        window.addEventListener('gamepaddisconnected', (e) => {
-            console.log('Gamepad disconnected');
-            gamepadIndex = null;
+    function playChannel(channelId, channelTitle) {
+        document.querySelectorAll('.channel-item').forEach(item => {
+            item.classList.toggle('active', item.dataset.channelId === channelId);
         });
+        currentChannelId = channelId;
+        elements.currentChannel.textContent = `Now playing: ${channelTitle}`;
+        elements.emptyState.style.display = 'none';
+        elements.videoPlayer.style.display = 'block';
+        elements.videoPlayer.play().catch(() => {});
+        startStream(channelId);
+    }
 
-        // Fetch channels
-        fetch('/api/channels')
-            .then(response => {
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                return response.json();
-            })
-            .then(channels => {
-                allChannels = channels.sort((a, b) => a.title.localeCompare(b.title));
-                renderChannels(allChannels);
-                elements.channelCount.textContent = `${allChannels.length} channels available`;
-                setStatus(STATUS.IDLE, 'Use arrow keys to navigate channels');
-                
-                // Show hint briefly on load
-                setTimeout(showRemoteHint, 1000);
-            })
-            .catch(error => {
-                elements.channelList.innerHTML = '<div class="error-state">Failed to load channels</div>';
-                elements.channelCount.textContent = 'Error loading channels';
-                setStatus(STATUS.ERROR, `Error: ${error.message}`);
-                console.error('Channel fetch error:', error);
-            });
-
-        function playChannel(channelId, channelTitle) {
-            // Update UI
-            document.querySelectorAll('.channel-item').forEach(item => {
-                item.classList.toggle('active', item.dataset.channelId === channelId);
-            });
-
-            currentChannelId = channelId;
-            elements.currentChannel.textContent = `Now playing: ${channelTitle}`;
-            elements.emptyState.style.display = 'none';
-            elements.videoPlayer.style.display = 'block';
-
-            // Prime video for autoplay
-            elements.videoPlayer.play().catch(() => {});
-            startStream(channelId);
+    function startStream(channelId) {
+        if (websocket) {
+            websocket.onopen = websocket.onmessage = websocket.onclose = websocket.onerror = null;
+            websocket.close();
+            websocket = null;
         }
-
-        function startStream(channelId) {
-            // Cleanup previous stream
-            if (websocket) {
-                websocket.onopen = websocket.onmessage = websocket.onclose = websocket.onerror = null;
-                websocket.close();
-                websocket = null;
-            }
-
-            if (elements.videoPlayer.src) {
-                URL.revokeObjectURL(elements.videoPlayer.src);
-            }
-
-            setStatus(STATUS.CONNECTING, 'Initializing stream...');
-            setLoading(true);
-
-            const mediaSource = new MediaSource();
-            let sourceBuffer = null;
-            const segmentQueue = [];
-
-            elements.videoPlayer.src = URL.createObjectURL(mediaSource);
-
-            mediaSource.addEventListener('sourceopen', () => {
-                try {
-                    const mimeCodec = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
-                    
-                    if (!MediaSource.isTypeSupported(mimeCodec)) {
-                        throw new Error('Codec not supported by browser');
-                    }
-
-                    sourceBuffer = mediaSource.addSourceBuffer(mimeCodec);
-
-                    const processQueue = () => {
-                        if (segmentQueue.length > 0 && sourceBuffer && !sourceBuffer.updating) {
-                            try {
-                                sourceBuffer.appendBuffer(segmentQueue.shift());
-                            } catch (e) {
-                                if (e.name !== 'InvalidStateError') {
-                                    console.error('Buffer append error:', e);
-                                }
+        if (elements.videoPlayer.src) {
+            URL.revokeObjectURL(elements.videoPlayer.src);
+        }
+        setStatus(STATUS.CONNECTING, 'Initializing stream...');
+        setLoading(true);
+        const mediaSource = new MediaSource();
+        let sourceBuffer = null;
+        const segmentQueue = [];
+        elements.videoPlayer.src = URL.createObjectURL(mediaSource);
+        mediaSource.addEventListener('sourceopen', () => {
+            try {
+                const mimeCodec = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
+                if (!MediaSource.isTypeSupported(mimeCodec)) {
+                    throw new Error('Codec not supported by browser');
+                }
+                sourceBuffer = mediaSource.addSourceBuffer(mimeCodec);
+                const processQueue = () => {
+                    if (segmentQueue.length > 0 && sourceBuffer && !sourceBuffer.updating) {
+                        try {
+                            sourceBuffer.appendBuffer(segmentQueue.shift());
+                        } catch (e) {
+                            if (e.name !== 'InvalidStateError') {
+                                console.error('Buffer append error:', e);
                             }
                         }
-                    };
-
-                    sourceBuffer.addEventListener('updateend', processQueue);
-
-                    let hasStartedPlaying = false;
-                    sourceBuffer.addEventListener('update', () => {
-                        if (!hasStartedPlaying && !sourceBuffer.updating && elements.videoPlayer.paused) {
-                            hasStartedPlaying = true;
-                            setLoading(false);
-                            elements.videoPlayer.play().catch(e => {
-                                console.warn('Autoplay prevented:', e);
-                                setStatus(STATUS.STREAMING, 'Click video to play');
-                            });
-                        }
-                    });
-
-                    // Connect WebSocket
-                    const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-                    const wsUrl = `${wsProtocol}//${location.hostname}:8765/${channelId}`;
-                    
-                    websocket = new WebSocket(wsUrl);
-                    websocket.binaryType = 'arraybuffer';
-
-                    websocket.onopen = () => {
-                        setStatus(STATUS.CONNECTING, 'Connected, buffering stream...');
-                    };
-
-                    websocket.onmessage = (event) => {
-                        if (hasStartedPlaying) {
-                            setStatus(STATUS.STREAMING, 'Streaming live');
-                        }
-                        segmentQueue.push(event.data);
-                        processQueue();
-                    };
-
-                    websocket.onclose = (event) => {
+                    }
+                };
+                sourceBuffer.addEventListener('updateend', processQueue);
+                let hasStartedPlaying = false;
+                sourceBuffer.addEventListener('update', () => {
+                    if (!hasStartedPlaying && !sourceBuffer.updating && elements.videoPlayer.paused) {
+                        hasStartedPlaying = true;
                         setLoading(false);
-                        const reason = event.reason || 'Connection closed';
-                        setStatus(STATUS.ERROR, `Disconnected: ${reason}`);
-                        
-                        if (mediaSource.readyState === 'open' && sourceBuffer && !sourceBuffer.updating) {
-                            mediaSource.endOfStream();
-                        }
-                    };
-
-                    websocket.onerror = () => {
-                        setLoading(false);
-                        setStatus(STATUS.ERROR, 'Connection failed');
-                    };
-
-                } catch (e) {
+                        elements.videoPlayer.play().catch(e => {
+                            console.warn('Autoplay prevented:', e);
+                            setStatus(STATUS.STREAMING, 'Click video to play');
+                        });
+                    }
+                });
+                const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${wsProtocol}//${location.hostname}:8765/${channelId}`;
+                websocket = new WebSocket(wsUrl);
+                websocket.binaryType = 'arraybuffer';
+                websocket.onopen = () => {
+                    setStatus(STATUS.CONNECTING, 'Connected, buffering stream...');
+                };
+                websocket.onmessage = (event) => {
+                    if (hasStartedPlaying) {
+                        setStatus(STATUS.STREAMING, 'Streaming live');
+                    }
+                    segmentQueue.push(event.data);
+                    processQueue();
+                };
+                websocket.onclose = (event) => {
                     setLoading(false);
-                    setStatus(STATUS.ERROR, `Player error: ${e.message}`);
-                    console.error('MediaSource error:', e);
-                }
-            }, { once: true });
+                    const reason = event.reason || 'Connection closed';
+                    setStatus(STATUS.ERROR, `Disconnected: ${reason}`);
+                    if (mediaSource.readyState === 'open' && sourceBuffer && !sourceBuffer.updating) {
+                        mediaSource.endOfStream();
+                    }
+                };
+                websocket.onerror = () => {
+                    setLoading(false);
+                    setStatus(STATUS.ERROR, 'Connection failed');
+                };
+            } catch (e) {
+                setLoading(false);
+                setStatus(STATUS.ERROR, `Player error: ${e.message}`);
+                console.error('MediaSource error:', e);
+            }
+        }, { once: true });
+    }
+
+    elements.videoPlayer.addEventListener('playing', () => {
+        if (websocket && websocket.readyState === WebSocket.OPEN) {
+            setStatus(STATUS.STREAMING, 'Streaming live');
         }
-
-        // Video player events
-        elements.videoPlayer.addEventListener('playing', () => {
-            if (websocket && websocket.readyState === WebSocket.OPEN) {
-                setStatus(STATUS.STREAMING, 'Streaming live');
-            }
-        });
-
-        elements.videoPlayer.addEventListener('pause', () => {
-            if (websocket && websocket.readyState === WebSocket.OPEN) {
-                setStatus(STATUS.STREAMING, 'Paused');
-            }
-        });
-
-        // Double-click video for fullscreen
-        elements.videoPlayer.addEventListener('dblclick', toggleFullscreen);
-
-        // Fullscreen change detection
-        document.addEventListener('fullscreenchange', updateFullscreenUI);
-        document.addEventListener('webkitfullscreenchange', updateFullscreenUI);
-        document.addEventListener('mozfullscreenchange', updateFullscreenUI);
-        document.addEventListener('MSFullscreenChange', updateFullscreenUI);
-
-        function updateFullscreenUI() {
-            const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || 
-                                     document.mozFullScreenElement || document.msFullscreenElement);
-            
-            if (isFullscreen) {
-                console.log('Entered fullscreen mode');
-            } else {
-                console.log('Exited fullscreen mode');
-            }
+    });
+    elements.videoPlayer.addEventListener('pause', () => {
+        if (websocket && websocket.readyState === WebSocket.OPEN) {
+            setStatus(STATUS.STREAMING, 'Paused');
         }
+    });
+    elements.videoPlayer.addEventListener('dblclick', toggleFullscreen);
 
-        // Show hint on initial load
-        setTimeout(showRemoteHint, 2000);
-    </script>
+    function updateFullscreenUI() {
+        const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || 
+                                 document.mozFullScreenElement || document.msFullscreenElement);
+        if (isFullscreen) {
+            console.log('Entered fullscreen mode');
+        } else {
+            console.log('Exited fullscreen mode');
+        }
+    }
+
+    document.addEventListener('fullscreenchange', updateFullscreenUI);
+    document.addEventListener('webkitfullscreenchange', updateFullscreenUI);
+    document.addEventListener('mozfullscreenchange', updateFullscreenUI);
+    document.addEventListener('MSFullscreenChange', updateFullscreenUI);
+
+    setTimeout(showRemoteHint, 2000);
+</script>
 </body>
 </html>
