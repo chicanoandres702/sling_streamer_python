@@ -23,6 +23,7 @@ import subprocess
 import asyncio
 import socket
 import logging
+import webbrowser
 import argparse
 from urllib.parse import urljoin
 
@@ -782,12 +783,28 @@ async def stream_handler(websocket, path):
 
 def run_flask(): app.run(host=HTTP_HOST, port=HTTP_PORT, debug=False, use_reloader=False)
 
+def get_local_ip():
+    """
+    Attempts to get the local network IP address.
+    Falls back to 127.0.0.1 if unable to determine.
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(('10.255.255.255', 1)) # Doesn't actually send data
+        IP = s.getsockname()[0]
+    except Exception:
+        IP = '127.0.0.1'
+    finally:
+        s.close()
+    return IP
+
 async def start_web_server():
     server = await websockets.serve(stream_handler, WEBSOCKET_HOST, WEBSOCKET_PORT)
     logging.info(f"WebSocket server started on ws://{WEBSOCKET_HOST}:{WEBSOCKET_PORT}")
     logging.info(f"HTTP server started on http://{HTTP_HOST}:{HTTP_PORT}")
-    loop = asyncio.get_running_loop()
-    loop.run_in_executor(None, run_flask)
+    asyncio.get_running_loop().run_in_executor(None, run_flask)
+    local_ip = get_local_ip()
+    webbrowser.open(f"http://{local_ip}:{HTTP_PORT}")
     await server.wait_closed()
 
 # ==============================================================================
