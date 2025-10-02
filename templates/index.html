@@ -2,310 +2,1060 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Sling TV Remote Player</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sling TV Player</title>
     <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            display: flex;
-            margin: 0;
-            background-color: #f4f4f9;
-            color: #333;
-            overflow: hidden; /* Prevent page scroll from arrow keys */
-        }
-        #sidebar {
-            width: 280px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
             height: 100vh;
-            overflow-y: auto;
-            border-right: 1px solid #ddd;
-            background-color: #fff;
-            flex-shrink: 0;
-            transition: box-shadow 0.3s ease;
+            overflow: hidden;
         }
-        /* Visual feedback for when the sidebar has focus */
-        #sidebar.focused {
-            box-shadow: 0 0 10px 3px rgba(74, 118, 232, 0.7);
+
+        .app-container {
+            display: flex;
+            height: 100vh;
         }
-        #sidebar h2 {
-            padding: 15px;
-            margin: 0;
-            border-bottom: 1px solid #ddd;
-            position: sticky;
-            top: 0;
-            background-color: #fff;
-            z-index: 10;
-        }
-        #channel-list { list-style: none; padding: 0; margin: 0; }
-        #channel-list li {
-            padding: 12px 15px;
-            cursor: pointer;
-            border-bottom: 1px solid #eee;
-            transition: background-color 0.2s ease-in-out;
-            border-left: 4px solid transparent;
-        }
-        /* Style for the currently playing channel */
-        #channel-list li.active {
-            font-weight: bold;
-            background-color: #e9efff;
-        }
-        /* Style for the remote-controlled highlighted channel */
-        #channel-list li.highlighted {
-            background-color: #4a76e8;
-            color: white;
-            border-left: 4px solid #1a4fd8;
-        }
-        #main-content {
-            flex-grow: 1;
-            padding: 20px;
+
+        /* Left Panel - Channel List */
+        .channel-panel {
+            width: 300px;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(10px);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
             display: flex;
             flex-direction: column;
+            overflow: hidden;
+            transition: transform 0.3s ease;
+        }
+
+        .channel-panel.hidden {
+            transform: translateX(-100%);
+        }
+
+        body:fullscreen .channel-panel,
+        body:-webkit-full-screen .channel-panel,
+        body:-moz-full-screen .channel-panel,
+        body:-ms-fullscreen .channel-panel {
+            transform: translateX(-100%);
+        }
+
+        .panel-header {
+            background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+            padding: 1.5rem;
+            flex-shrink: 0;
+        }
+
+        .panel-header h2 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+
+        .search-box {
+            margin-top: 1rem;
+            position: relative;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 0.75rem 1rem 0.75rem 2.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 0.9rem;
+        }
+
+        .search-box input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: rgba(255, 255, 255, 0.4);
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .search-box::before {
+            content: '🔍';
+            position: absolute;
+            left: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.9rem;
+        }
+
+        .channel-count {
+            padding: 0.75rem 1.5rem;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.6);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .channel-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.5rem;
+            scroll-behavior: smooth;
+        }
+
+        .channel-list::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .channel-list::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .channel-list::-webkit-scrollbar-thumb {
+            background: rgba(255, 107, 53, 0.5);
+            border-radius: 4px;
+        }
+
+        .channel-list::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 107, 53, 0.7);
+        }
+
+        .channel-item {
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid transparent;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+
+        .channel-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 107, 53, 0.3);
+            transform: translateX(4px);
+        }
+
+        .channel-item.focused {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: #00d4ff;
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+            transform: translateX(8px) scale(1.02);
+        }
+
+        .channel-item.active {
+            background: linear-gradient(135deg, rgba(255, 107, 53, 0.3) 0%, rgba(247, 147, 30, 0.3) 100%);
+            border-color: #ff6b35;
+        }
+
+        .channel-item.active.focused {
+            border-color: #00d4ff;
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+        }
+
+        .channel-name {
+            font-weight: 500;
+            font-size: 0.95rem;
+            display: block;
+            margin-bottom: 0.25rem;
+        }
+
+        .channel-id {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+            font-family: monospace;
+        }
+
+        .loading-state, .error-state {
+            padding: 2rem 1.5rem;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .loading-state::before {
+            content: '⟳';
+            display: block;
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            animation: spin 2s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Right Panel - Video Player */
+        .player-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .player-header {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
             align-items: center;
         }
-        #videoPlayer {
+
+        body:fullscreen .player-header,
+        body:-webkit-full-screen .player-header,
+        body:-moz-full-screen .player-header,
+        body:-ms-fullscreen .player-header {
+            display: none;
+        }
+
+        .player-title {
+            flex: 1;
+        }
+
+        .player-header h1 {
+            font-size: 1.8rem;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+
+        .current-channel {
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .control-button {
+            padding: 0.75rem 1.25rem;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid transparent;
+            border-radius: 8px;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .control-button:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 107, 53, 0.5);
+        }
+
+        .control-button:focus {
+            outline: none;
+            border-color: #00d4ff;
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.4);
+        }
+
+        .control-button.fullscreen-btn {
+            background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+        }
+
+        .video-wrapper {
+            flex: 1;
+            position: relative;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        video {
             width: 100%;
-            max-width: 1000px;
-            background-color: #000;
-            border-radius: 5px;
-            transition: box-shadow 0.3s ease;
+            height: 100%;
+            display: block;
         }
-        /* Visual feedback for when the video player has focus */
-        #videoPlayer.focused {
-             box-shadow: 0 0 10px 3px rgba(74, 118, 232, 0.7);
+
+        .loading-spinner {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 64px;
+            height: 64px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #ff6b35;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: none;
+            z-index: 10;
         }
-        #status {
-            margin-top: 15px;
-            font-size: 1.1em;
-            color: #555;
-            min-height: 24px;
+
+        .loading-spinner.active { display: block; }
+
+        .empty-state {
             text-align: center;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .empty-state-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.3;
+        }
+
+        .empty-state-text {
+            font-size: 1.1rem;
+        }
+
+        .status-bar {
+            padding: 1rem 2rem;
+            background: rgba(0, 0, 0, 0.5);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        body:fullscreen .status-bar,
+        body:-webkit-full-screen .status-bar,
+        body:-moz-full-screen .status-bar,
+        body:-ms-fullscreen .status-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.8);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        body:fullscreen .status-bar:hover,
+        body:-webkit-full-screen .status-bar:hover,
+        body:-moz-full-screen .status-bar:hover,
+        body:-ms-fullscreen .status-bar:hover {
+            opacity: 1;
+        }
+
+        .status-icon {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .status-icon.idle { background: #6c757d; }
+        .status-icon.connecting { 
+            background: #ffc107;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        .status-icon.streaming { background: #28a745; }
+        .status-icon.error { background: #dc3545; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .status-text {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        /* Remote Control Hint */
+        .remote-hint {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.7);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 1000;
+        }
+
+        .remote-hint.show {
+            opacity: 1;
+        }
+
+        body:fullscreen .remote-hint,
+        body:-webkit-full-screen .remote-hint,
+        body:-moz-full-screen .remote-hint,
+        body:-ms-fullscreen .remote-hint {
+            display: none;
+        }
+
+        /* Fullscreen Overlay Controls */
+        .fullscreen-controls {
+            position: absolute;
+            top: 2rem;
+            right: 2rem;
+            display: none;
+            gap: 1rem;
+            z-index: 100;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        body:fullscreen .fullscreen-controls,
+        body:-webkit-full-screen .fullscreen-controls,
+        body:-moz-full-screen .fullscreen-controls,
+        body:-ms-fullscreen .fullscreen-controls {
+            display: flex;
+        }
+
+        .video-wrapper:hover .fullscreen-controls {
+            opacity: 1;
+        }
+
+        .fs-button {
+            padding: 0.75rem 1.25rem;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            color: #fff;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .fs-button:hover {
+            background: rgba(255, 107, 53, 0.8);
+            border-color: #ff6b35;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .channel-panel {
+                width: 250px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .app-container {
+                flex-direction: column;
+            }
+
+            .channel-panel {
+                width: 100%;
+                height: 40vh;
+                border-right: none;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            }
+
+            .player-panel {
+                height: 60vh;
+            }
+
+            .channel-item:hover {
+                transform: translateX(0);
+                transform: translateY(-2px);
+            }
+
+            .channel-item.focused {
+                transform: translateY(-2px) scale(1.02);
+            }
         }
     </style>
 </head>
 <body>
-    <div id="sidebar">
-        <h2>Channels</h2>
-        <ul id="channel-list">
-            <li>Loading channels...</li>
-        </ul>
+    <div class="app-container">
+        <!-- Left Panel: Channel List -->
+        <div class="channel-panel" id="channel-panel">
+            <div class="panel-header">
+                <h2>📺 Channels</h2>
+                <div class="search-box">
+                    <input type="text" id="channel-search" placeholder="Search channels...">
+                </div>
+            </div>
+            <div class="channel-count" id="channel-count">Loading channels...</div>
+            <div class="channel-list" id="channel-list">
+                <div class="loading-state">Loading channels...</div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Video Player -->
+        <div class="player-panel">
+            <div class="player-header">
+                <div class="player-title">
+                    <h1>🎬 Sling TV Player</h1>
+                    <div class="current-channel" id="current-channel">No channel selected</div>
+                </div>
+                <div class="header-controls">
+                    <button class="control-button" id="toggle-panel-btn" title="Toggle Channel List">
+                        <span>☰</span>
+                        <span>Channels</span>
+                    </button>
+                    <button class="control-button fullscreen-btn" id="fullscreen-btn" title="Fullscreen (F)">
+                        <span>⛶</span>
+                        <span>Fullscreen</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="video-wrapper" id="video-wrapper">
+                <video id="video-player" controls style="display: none;"></video>
+                <div class="loading-spinner" id="loading-spinner"></div>
+                <div class="empty-state" id="empty-state">
+                    <div class="empty-state-icon">📺</div>
+                    <div class="empty-state-text">Select a channel to start streaming</div>
+                </div>
+                
+                <!-- Fullscreen Overlay Controls -->
+                <div class="fullscreen-controls">
+                    <button class="fs-button" id="fs-exit-btn">Exit Fullscreen</button>
+                </div>
+            </div>
+
+            <div class="status-bar">
+                <div class="status-icon idle" id="status-icon"></div>
+                <div class="status-text" id="status-text">Ready - Use arrow keys to navigate</div>
+            </div>
+        </div>
     </div>
-    <div id="main-content">
-        <h1>Sling Player</h1>
-        <video id="videoPlayer" controls></video>
-        <p id="status">Please select a channel to begin.</p>
+
+    <!-- Remote Control Hint -->
+    <div class="remote-hint" id="remote-hint">
+        ⬆️ ⬇️ Navigate • Enter/OK to Play • F for Fullscreen • Esc to Exit
     </div>
 
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    // DOM Elements
-    const video = document.getElementById('videoPlayer');
-    const channelList = document.getElementById('channel-list');
-    const sidebar = document.getElementById('sidebar');
-    const statusEl = document.getElementById('status');
-    
-    // State Management
-    let focusState = 'SIDEBAR'; // Can be 'SIDEBAR' or 'PLAYER'
-    let websocket;
-    let mediaSource;
-    let sourceBuffer;
-    let bufferQueue = [];
-    let isAppending = false;
+    <script>
+        const elements = {
+            channelList: document.getElementById('channel-list'),
+            channelCount: document.getElementById('channel-count'),
+            channelSearch: document.getElementById('channel-search'),
+            videoPlayer: document.getElementById('video-player'),
+            videoWrapper: document.getElementById('video-wrapper'),
+            emptyState: document.getElementById('empty-state'),
+            currentChannel: document.getElementById('current-channel'),
+            statusText: document.getElementById('status-text'),
+            statusIcon: document.getElementById('status-icon'),
+            loadingSpinner: document.getElementById('loading-spinner'),
+            channelPanel: document.getElementById('channel-panel'),
+            fullscreenBtn: document.getElementById('fullscreen-btn'),
+            fsExitBtn: document.getElementById('fs-exit-btn'),
+            togglePanelBtn: document.getElementById('toggle-panel-btn'),
+            remoteHint: document.getElementById('remote-hint')
+        };
 
-    const mimeCodec = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
+        let websocket = null;
+        let allChannels = [];
+        let filteredChannels = [];
+        let currentChannelId = null;
+        let focusedIndex = 0;
 
-    // --- INITIALIZATION ---
-    fetch('/api/channels')
-        .then(response => { if (!response.ok) throw new Error(`Server error: ${response.statusText}`); return response.json(); })
-        .then(data => {
-            if (data.error) throw new Error(data.error);
-            channelList.innerHTML = '';
-            data.forEach(channel => {
-                const li = document.createElement('li');
-                li.textContent = channel.title;
-                li.dataset.id = channel.id;
-                li.onclick = () => playChannel(channel, li);
-                channelList.appendChild(li);
-            });
-            // Highlight the first channel and set initial focus
-            if (channelList.children.length > 0) {
-                channelList.children[0].classList.add('highlighted');
-                setFocus('SIDEBAR');
+        const STATUS = {
+            IDLE: 'idle',
+            CONNECTING: 'connecting',
+            STREAMING: 'streaming',
+            ERROR: 'error'
+        };
+
+        function setStatus(status, message) {
+            elements.statusText.textContent = message;
+            elements.statusIcon.className = `status-icon ${status}`;
+        }
+
+        function setLoading(isLoading) {
+            elements.loadingSpinner.classList.toggle('active', isLoading);
+        }
+
+        function renderChannels(channels) {
+            filteredChannels = channels;
+            
+            if (channels.length === 0) {
+                elements.channelList.innerHTML = '<div class="error-state">No channels found</div>';
+                return;
             }
-        })
-        .catch(error => {
-            channelList.innerHTML = '';
-            statusEl.textContent = `Error: ${error.message}`;
+
+            elements.channelList.innerHTML = channels.map((channel, index) => `
+                <div class="channel-item ${index === 0 ? 'focused' : ''}" 
+                     data-channel-id="${channel.id}" 
+                     data-index="${index}"
+                     tabindex="0">
+                    <span class="channel-name">${channel.title}</span>
+                    <span class="channel-id">${channel.id.substring(0, 8)}...</span>
+                </div>
+            `).join('');
+
+            focusedIndex = 0;
+            attachChannelHandlers();
+        }
+
+        function attachChannelHandlers() {
+            document.querySelectorAll('.channel-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const channelId = item.dataset.channelId;
+                    const channel = allChannels.find(c => c.id === channelId);
+                    
+                    // If clicking the same active channel, go fullscreen
+                    if (channelId === currentChannelId) {
+                        toggleFullscreen();
+                    } else {
+                        playChannel(channelId, channel.title);
+                    }
+                });
+            });
+        }
+
+        function focusChannel(index) {
+            const items = document.querySelectorAll('.channel-item');
+            if (items.length === 0) return;
+
+            // Remove previous focus
+            items.forEach(item => item.classList.remove('focused'));
+
+            // Add new focus
+            focusedIndex = Math.max(0, Math.min(index, items.length - 1));
+            const focusedItem = items[focusedIndex];
+            focusedItem.classList.add('focused');
+
+            // Scroll into view
+            focusedItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function filterChannels(searchTerm) {
+            const filtered = allChannels.filter(channel =>
+                channel.title.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+            renderChannels(filtered);
+            elements.channelCount.textContent = `${filtered.length} of ${allChannels.length} channels`;
+        }
+
+        // Search functionality
+        elements.channelSearch.addEventListener('input', (e) => {
+            filterChannels(e.target.value);
         });
 
-    // --- CORE REMOTE CONTROL LOGIC ---
-    document.addEventListener('keydown', (event) => {
-        // Prevent default browser actions for arrow keys, space, etc.
-        event.preventDefault();
+        // Toggle channel panel
+        elements.togglePanelBtn.addEventListener('click', () => {
+            elements.channelPanel.classList.toggle('hidden');
+        });
 
-        if (focusState === 'SIDEBAR') {
-            handleSidebarKeys(event.key);
-        } else if (focusState === 'PLAYER') {
-            handlePlayerKeys(event.key);
-        }
-    });
-
-    function handleSidebarKeys(key) {
-        switch (key) {
-            case 'ArrowUp':
-                updateHighlight('up');
-                break;
-            case 'ArrowDown':
-                updateHighlight('down');
-                break;
-            case 'Enter':
-                const highlighted = channelList.querySelector('.highlighted');
-                if (highlighted) {
-                    highlighted.click(); // This will call playChannel
-                }
-                break;
-        }
-    }
-
-    function handlePlayerKeys(key) {
-        switch (key) {
-            case 'ArrowLeft':
-                video.currentTime -= 10; // Seek back 10 seconds
-                break;
-            case 'ArrowRight':
-                video.currentTime += 10; // Seek forward 10 seconds
-                break;
-            case ' ': // Spacebar for Play/Pause
-                 if (video.paused) video.play(); else video.pause();
-                break;
-            case 'f': // 'f' for Fullscreen
-                toggleFullscreen();
-                break;
-            case 'Backspace':
-                setFocus('SIDEBAR');
-                break;
-        }
-    }
-
-    // --- HELPER FUNCTIONS ---
-
-    function setFocus(newState) {
-        focusState = newState;
-        if (newState === 'SIDEBAR') {
-            sidebar.classList.add('focused');
-            video.classList.remove('focused');
-        } else { // PLAYER
-            sidebar.classList.remove('focused');
-            video.classList.add('focused');
-        }
-    }
-
-    function updateHighlight(direction) {
-        let current = channelList.querySelector('.highlighted');
-        if (!current) {
-            current = channelList.children[0];
-            if(current) current.classList.add('highlighted');
-            return;
+        // Fullscreen functionality
+        function toggleFullscreen() {
+            if (!document.fullscreenElement && !document.webkitFullscreenElement && 
+                !document.mozFullScreenElement && !document.msFullscreenElement) {
+                enterFullscreen();
+            } else {
+                exitFullscreen();
+            }
         }
 
-        let next = direction === 'up' ? current.previousElementSibling : current.nextElementSibling;
-
-        if (next) {
-            current.classList.remove('highlighted');
-            next.classList.add('highlighted');
-            // Ensure the highlighted item is always visible
-            next.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        function enterFullscreen() {
+            const elem = document.body;
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen();
+            } else if (elem.webkitRequestFullscreen) {
+                elem.webkitRequestFullscreen();
+            } else if (elem.mozRequestFullScreen) {
+                elem.mozRequestFullScreen();
+            } else if (elem.msRequestFullscreen) {
+                elem.msRequestFullscreen();
+            }
         }
-    }
 
-    function toggleFullscreen() {
-        if (!document.fullscreenElement) {
-            video.requestFullscreen().catch(err => {
-                alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
-            });
-        } else {
-            document.exitFullscreen();
+        function exitFullscreen() {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            } else if (document.mozCancelFullScreen) {
+                document.mozCancelFullScreen();
+            } else if (document.msExitFullscreen) {
+                document.msExitFullscreen();
+            }
         }
-    }
 
-    // --- STREAMING LOGIC (Modified to manage focus) ---
+        elements.fullscreenBtn.addEventListener('click', toggleFullscreen);
+        elements.fsExitBtn.addEventListener('click', exitFullscreen);
 
-    function playChannel(channel, element) {
-        document.querySelectorAll('#channel-list li').forEach(el => el.classList.remove('active'));
-        element.classList.add('active');
-
-        statusEl.textContent = `Initializing stream for ${channel.title}...`;
-        resetPlayer();
-        initializeMediaSource(channel.id);
+        // Keyboard/Remote Control Navigation
+        let remoteHintTimeout;
         
-        // IMPORTANT: Switch focus to the player after starting a stream
-        setFocus('PLAYER');
-    }
-    
-    // (The rest of the streaming functions are the same as before)
-
-    function resetPlayer() {
-        if (websocket && websocket.readyState === WebSocket.OPEN) websocket.close();
-        bufferQueue = [];
-        isAppending = false;
-        if (mediaSource && mediaSource.readyState === 'open') {
-            try { mediaSource.endOfStream(); } catch (e) {}
+        function showRemoteHint() {
+            elements.remoteHint.classList.add('show');
+            clearTimeout(remoteHintTimeout);
+            remoteHintTimeout = setTimeout(() => {
+                elements.remoteHint.classList.remove('show');
+            }, 3000);
         }
-        video.pause();
-        video.removeAttribute('src');
-        video.load();
-    }
 
-    function initializeMediaSource(channelId) {
-        if (!MediaSource.isTypeSupported(mimeCodec)) {
-            statusEl.textContent = 'Error: Browser does not support the required video codec.';
-            return;
-        }
-        mediaSource = new MediaSource();
-        video.src = URL.createObjectURL(mediaSource);
-        mediaSource.addEventListener('sourceopen', () => {
-            sourceBuffer = mediaSource.addSourceBuffer(mimeCodec);
-            sourceBuffer.addEventListener('updateend', processBufferQueue);
-            connectWebSocket(channelId);
-        });
-    }
+        document.addEventListener('keydown', (e) => {
+            // Show hint on first key press
+            showRemoteHint();
 
-    function connectWebSocket(channelId) {
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        // The port is hardcoded to match the server configuration
-        const wsPort = 8765; 
-        const wsUrl = `${wsProtocol}//${window.location.hostname}:${wsPort}/ws/${channelId}`;
+            switch(e.key) {
+                case 'ArrowUp':
+                    e.preventDefault();
+                    focusChannel(focusedIndex - 1);
+                    break;
 
-        statusEl.textContent = 'Connecting to stream server...';
-        websocket = new WebSocket(wsUrl);
-        websocket.binaryType = 'arraybuffer';
-        websocket.onopen = () => { statusEl.textContent = 'Connection established. Waiting for video data...'; };
-        websocket.onmessage = (event) => {
-            bufferQueue.push(event.data);
-            if (!isAppending) processBufferQueue();
-        };
-        websocket.onclose = (event) => { statusEl.textContent = `Stream disconnected. (Code: ${event.code})`; };
-        websocket.onerror = (error) => {
-            statusEl.textContent = 'A WebSocket error occurred. See console for details.';
-            console.error('WebSocket Error: ', error);
-        };
-    }
+                case 'ArrowDown':
+                    e.preventDefault();
+                    focusChannel(focusedIndex + 1);
+                    break;
 
-    function processBufferQueue() {
-        if (!isAppending && bufferQueue.length > 0 && sourceBuffer && !sourceBuffer.updating) {
-            isAppending = true;
-            try {
-                const data = bufferQueue.shift();
-                sourceBuffer.appendBuffer(data);
-                if (video.paused) { video.play().catch(e => console.warn("Autoplay was prevented:", e)); }
-            } catch (e) {
-                console.error('Error appending buffer:', e);
-                isAppending = false;
-                resetPlayer();
-                statusEl.textContent = `Error playing video. (Reason: ${e.name})`;
+                case 'Enter':
+                case 'OK': // Some remotes send 'OK'
+                case ' ': // Space bar
+                    e.preventDefault();
+                    const items = document.querySelectorAll('.channel-item');
+                    if (items[focusedIndex]) {
+                        const channelId = items[focusedIndex].dataset.channelId;
+                        const channel = allChannels.find(c => c.id === channelId);
+                        
+                        // If selecting the same active channel, go fullscreen
+                        if (channelId === currentChannelId) {
+                            toggleFullscreen();
+                        } else {
+                            playChannel(channelId, channel.title);
+                        }
+                    }
+                    break;
+
+                case 'Escape':
+                case 'Back': // Some remotes send 'Back'
+                    if (document.fullscreenElement) {
+                        exitFullscreen();
+                    }
+                    break;
+
+                case 'f':
+                case 'F':
+                    e.preventDefault();
+                    toggleFullscreen();
+                    break;
+
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    if (elements.channelPanel.classList.contains('hidden')) {
+                        elements.channelPanel.classList.remove('hidden');
+                    }
+                    break;
+
+                case 'ArrowRight':
+                    e.preventDefault();
+                    if (!elements.channelPanel.classList.contains('hidden')) {
+                        elements.channelPanel.classList.add('hidden');
+                    }
+                    break;
+
+                case 'Home':
+                    e.preventDefault();
+                    focusChannel(0);
+                    break;
+
+                case 'End':
+                    e.preventDefault();
+                    focusChannel(filteredChannels.length - 1);
+                    break;
+
+                case 'PageUp':
+                    e.preventDefault();
+                    focusChannel(focusedIndex - 5);
+                    break;
+
+                case 'PageDown':
+                    e.preventDefault();
+                    focusChannel(focusedIndex + 5);
+                    break;
             }
-        } else {
-            isAppending = false;
+        });
+
+        // Gamepad/Remote Control Support
+        let gamepadIndex = null;
+        let lastButtonState = {};
+
+        function pollGamepad() {
+            const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+            
+            for (let i = 0; i < gamepads.length; i++) {
+                const gamepad = gamepads[i];
+                if (gamepad) {
+                    gamepadIndex = i;
+                    
+                    // D-pad or left stick
+                    const axes = gamepad.axes;
+                    const buttons = gamepad.buttons;
+
+                    // Vertical navigation (axis 1 or D-pad up/down)
+                    if (axes[1] < -0.5 || (buttons[12] && buttons[12].pressed)) {
+                        // Up
+                        if (!lastButtonState.up) {
+                            focusChannel(focusedIndex - 1);
+                            lastButtonState.up = true;
+                        }
+                    } else {
+                        lastButtonState.up = false;
+                    }
+
+                    if (axes[1] > 0.5 || (buttons[13] && buttons[13].pressed)) {
+                        // Down
+                        if (!lastButtonState.down) {
+                            focusChannel(focusedIndex + 1);
+                            lastButtonState.down = true;
+                        }
+                    } else {
+                        lastButtonState.down = false;
+                    }
+
+                    // Horizontal navigation (axis 0 or D-pad left/right)
+                    if (axes[0] < -0.5 || (buttons[14] && buttons[14].pressed)) {
+                        // Left - show panel
+                        if (!lastButtonState.left) {
+                            elements.channelPanel.classList.remove('hidden');
+                            lastButtonState.left = true;
+                        }
+                    } else {
+                        lastButtonState.left = false;
+                    }
+
+                    if (axes[0] > 0.5 || (buttons[15] && buttons[15].pressed)) {
+                        // Right - hide panel
+                        if (!lastButtonState.right) {
+                            elements.channelPanel.classList.add('hidden');
+                            lastButtonState.right = true;
+                        }
+                    } else {
+                        lastButtonState.right = false;
+                    }
+
+                    // A button (usually button 0) - Select channel
+                    if (buttons[0] && buttons[0].pressed) {
+                        if (!lastButtonState.a) {
+                            const items = document.querySelectorAll('.channel-item');
+                            if (items[focusedIndex]) {
+                                const channelId = items[focusedIndex].dataset.channelId;
+                                const channel = allChannels.find(c => c.id === channelId);
+                                
+                                if (channelId === currentChannelId) {
+                                    toggleFullscreen();
+                                } else {
+                                    playChannel(channelId, channel.title);
+                                }
+                            }
+                            lastButtonState.a = true;
+                        }
+                    } else {
+                        lastButtonState.a = false;
+                    }
+
+                    // B button (usually button 1) - Exit fullscreen
+                    if (buttons[1] && buttons[1].pressed) {
+                        if (!lastButtonState.b && document.fullscreenElement) {
+                            exitFullscreen();
+                            lastButtonState.b = true;
+                        }
+                    } else {
+                        lastButtonState.b = false;
+                    }
+
+                    // Start button (usually button 9) - Fullscreen toggle
+                    if (buttons[9] && buttons[9].pressed) {
+                        if (!lastButtonState.start) {
+                            toggleFullscreen();
+                            lastButtonState.start = true;
+                        }
+                    } else {
+                        lastButtonState.start = false;
+                    }
+                }
+            }
+
+            if (gamepadIndex !== null) {
+                requestAnimationFrame(pollGamepad);
+            }
         }
-    }
-});
-</script>
+
+        // Start gamepad polling when a gamepad is connected
+        window.addEventListener('gamepadconnected', (e) => {
+            console.log('Gamepad connected:', e.gamepad.id);
+            gamepadIndex = e.gamepad.index;
+            pollGamepad();
+            showRemoteHint();
+        });
+
+        window.addEventListener('gamepaddisconnected', (e) => {
+            console.log('Gamepad disconnected');
+            gamepadIndex = null;
+        });
+
+        // Fetch channels
+        fetch('/api/channels')
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return response.json();
+            })
+            .then(channels => {
+                allChannels = channels.sort((a, b) => a.title.localeCompare(b.title));
+                renderChannels(allChannels);
+                elements.channelCount.textContent = `${allChannels.length} channels available`;
+                setStatus(STATUS.IDLE, 'Use arrow keys to navigate channels');
+                
+                // Show hint briefly on load
+                setTimeout(showRemoteHint, 1000);
+            })
+            .catch(error => {
+                elements.channelList.innerHTML = '<div class="error-state">Failed to load channels</div>';
+                elements.channelCount.textContent = 'Error loading channels';
+                setStatus(STATUS.ERROR, `Error: ${error.message}`);
+                console.error('Channel fetch error:', error);
+            });
+
+        function playChannel(channelId, channelTitle) {
+            // Update UI
+            document.querySelectorAll('.channel-item').forEach(item => {
+                item.classList.toggle('active', item.dataset.channelId === channelId);
+            });
+
+            currentChannelId = channelId;
+            elements.currentChannel.textContent = `Now playing: ${channelTitle}`;
+            elements.emptyState.style.display = 'none';
+            elements.videoPlayer.style.display = 'block';
+
+            // Prime video for autoplay
+            elements.videoPlayer.play().catch(() => {});
+            startStream(channelId);
+        }
+
+        function startStream(channelId) {
+            // Cleanup previous stream
+            if (websocket) {
+                websocket.onopen = websocket.onmessage = websocket.onclose = websocket.onerror = null;
+                websocket.close();
+                websocket = null;
+            }
+
+            if (elements.videoPlayer.src) {
+                URL.revokeObjectURL(elements.videoPlayer.src);
+            }
+
+            setStatus(STATUS.CONNECTING, 'Initializing stream...');
+            setLoading(true);
+
+            const mediaSource = new MediaSource();
+            let sourceBuffer = null;
+            const segmentQueue = [];
+
+            elements.videoPlayer.src = URL.createObjectURL(mediaSource);
+
+            mediaSource.addEventListener('sourceopen', () => {
+                try {
+                    const mimeCodec = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
+                    
+                    if (!MediaSource.isTypeSupported(mimeCodec)) {
+                        throw new Error('Codec not supported by browser');
+                    }
+
+                    sourceBuffer = mediaSource.addSourceBuffer(mimeCodec);
+
+                    const processQueue = () => {
+                        if (segmentQueue.length > 0 && sourceBuffer && !sourceBuffer.updating) {
+                            try {
+                                sourceBuffer.appendBuffer(segmentQueue.shift());
+                            } catch (e) {
+                                if (e.name !== 'InvalidStateError') {
+                                    console.error('Buffer append error:', e);
+                                }
+                            }
+                        }
+                    };
+
+                    sourceBuffer.addEventListener('updateend', processQueue);
+
+                    let hasStartedPlaying = false;
+                    sourceBuffer.addEventListener('update', () => {
+                        if (!hasStartedPlaying && !sourceBuffer.updating && elements.videoPlayer.paused) {
+                            hasStartedPlaying = true;
+                            setLoading(false);
+                            elements.videoPlayer.play().catch(e => {
+                                console.warn('Autoplay prevented:', e);
+                                setStatus(STATUS.STREAMING, 'Click video to play');
+                            });
+                        }
+                    });
+
+                    // Connect WebSocket
+                    const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    const wsUrl = `${wsProtocol}//${location.hostname}:8765/${channelId}`;
+                    
+                    websocket = new WebSocket(wsUrl);
+                    websocket.binaryType = 'arraybuffer';
+
+                    websocket.onopen = () => {
+                        setStatus(STATUS.CONNECTING, 'Connected, buffering stream...');
+                    };
+
+                    websocket.onmessage = (event) => {
+                        if (hasStartedPlaying) {
+                            setStatus(STATUS.STREAMING, 'Streaming live');
+                        }
+                        segmentQueue.push(event.data);
+                        processQueue();
+                    };
+
+                    websocket.onclose = (event) => {
+                        setLoading(false);
+                        const reason = event.reason || 'Connection closed';
+                        setStatus(STATUS.ERROR, `Disconnected: ${reason}`);
+                        
+                        if (mediaSource.readyState === 'open' && sourceBuffer && !sourceBuffer.updating) {
+                            mediaSource.endOfStream();
+                        }
+                    };
+
+                    websocket.onerror = () => {
+                        setLoading(false);
+                        setStatus(STATUS.ERROR, 'Connection failed');
+                    };
+
+                } catch (e) {
+                    setLoading(false);
+                    setStatus(STATUS.ERROR, `Player error: ${e.message}`);
+                    console.error('MediaSource error:', e);
+                }
+            }, { once: true });
+        }
+
+        // Video player events
+        elements.videoPlayer.addEventListener('playing', () => {
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                setStatus(STATUS.STREAMING, 'Streaming live');
+            }
+        });
+
+        elements.videoPlayer.addEventListener('pause', () => {
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                setStatus(STATUS.STREAMING, 'Paused');
+            }
+        });
+
+        // Double-click video for fullscreen
+        elements.videoPlayer.addEventListener('dblclick', toggleFullscreen);
+
+        // Fullscreen change detection
+        document.addEventListener('fullscreenchange', updateFullscreenUI);
+        document.addEventListener('webkitfullscreenchange', updateFullscreenUI);
+        document.addEventListener('mozfullscreenchange', updateFullscreenUI);
+        document.addEventListener('MSFullscreenChange', updateFullscreenUI);
+
+        function updateFullscreenUI() {
+            const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || 
+                                     document.mozFullScreenElement || document.msFullscreenElement);
+            
+            if (isFullscreen) {
+                console.log('Entered fullscreen mode');
+            } else {
+                console.log('Exited fullscreen mode');
+            }
+        }
+
+        // Show hint on initial load
+        setTimeout(showRemoteHint, 2000);
+    </script>
 </body>
 </html>
