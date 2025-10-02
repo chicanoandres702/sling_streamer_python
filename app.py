@@ -298,6 +298,8 @@ class FFmpegProcess:
             key_file = self._create_key_file()
             decryption_args = []
             if key_file:
+                # Note: Using decryption_key requires a single key. This setup assumes video/audio use the same key.
+                # If they can differ, a more complex setup with per-stream key files would be needed.
                 decryption_args = ['-decryption_key', list(self._keys_dict.values())[0]]
 
             # Setup input sockets
@@ -314,6 +316,7 @@ class FFmpegProcess:
                 *decryption_args,
                 '-i', f'tcp://127.0.0.1:{video_port}?timeout=10000000',
                 '-c:v', 'copy',
+                '-copyts',
                 '-f', 'mpegts',
                 f'tcp://127.0.0.1:{video_mux_port}?listen=1&timeout=10000000'
             ]
@@ -323,16 +326,20 @@ class FFmpegProcess:
                 *decryption_args,
                 '-i', f'tcp://127.0.0.1:{audio_port}?timeout=10000000',
                 '-c:a', 'copy',
+                '-copyts',
                 '-f', 'mpegts',
                 f'tcp://127.0.0.1:{audio_mux_port}?listen=1&timeout=10000000'
             ]
             
+            # --- MODIFICATION START ---
+            # This muxer command now includes timestamp-based synchronization flags.
             muxer_cmd = [
                 'ffmpeg', '-y',
                 '-i', f'tcp://127.0.0.1:{video_mux_port}?timeout=10000000',
                 '-i', f'tcp://127.0.0.1:{audio_mux_port}?timeout=10000000',
                 '-map', '0:v',
                 '-map', '1:a',
+                '-fflags', '+genpts',
                 # Preserve original timestamps and sync audio start to video
                 '-copyts',
                 '-async', '1',
@@ -343,6 +350,7 @@ class FFmpegProcess:
                 '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
                 '-'
             ]
+            # --- MODIFICATION END ---
 
             logging.info(f"Starting video decoder...")
             self.video_process = subprocess.Popen(
