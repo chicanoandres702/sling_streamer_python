@@ -39,7 +39,17 @@ from pywidevine.pssh import PSSH
 # ==============================================================================
 # --- 1. CENTRALIZED CONFIGURATION ---
 # ==============================================================================
-WVD_FILE = 'WVD.wvd'
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+WVD_FILE = resource_path('WVD.wvd')
 HTTP_HOST = '0.0.0.0'
 HTTP_PORT = 8000
 WEBSOCKET_HOST = '0.0.0.0'
@@ -744,7 +754,10 @@ class SlingStreamer:
 # ==============================================================================
 # --- 3. WEB SERVER LOGIC ---
 # ==============================================================================
-app = Flask(__name__)
+# When running as a bundled app, the templates folder is in a different location
+template_folder = resource_path('templates')
+app = Flask(__name__, template_folder=template_folder)
+
 @app.route('/')
 def index(): return render_template('index.html')
 @app.route('/api/channels')
@@ -874,11 +887,16 @@ if __name__ == '__main__':
         logging.info(f"--- Starting in CLI mode: Stream Channel {args.channel} ---")
         stream_channel_cli(args.channel, args.output)
     else:
-        logging.info("--- No CLI arguments detected. Starting Web Server mode. ---")
+        logging.info("--- No CLI arguments detected. Starting Tray App mode. ---")
         try:
-            asyncio.run(start_web_server())
-        except KeyboardInterrupt:
-            logging.info("\nServers shutting down.")
-        except OSError as e:
-            logging.critical(f"FATAL STARTUP ERROR: {e}")
-            sys.exit(1)
+            from app_tray import run_tray_app
+            run_tray_app()
+        except ImportError:
+            logging.warning("Could not import 'app_tray', falling back to web server mode.")
+            try:
+                asyncio.run(start_web_server())
+            except KeyboardInterrupt:
+                logging.info("\nServers shutting down.")
+            except OSError as e:
+                logging.critical(f"FATAL STARTUP ERROR: {e}")
+                sys.exit(1)
